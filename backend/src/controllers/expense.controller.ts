@@ -13,7 +13,13 @@ export const createExpenseCategory = asyncHandler(async (req: Request, res: Resp
 });
 
 export const listExpenses = asyncHandler(async (req: Request, res: Response) => {
-  const result = await expenseService.listExpenses(req.user!.businessId!, req.query as never);
+  const q = req.query as Record<string, string | undefined>;
+  const result = await expenseService.listExpenses(req.user!.businessId!, {
+    page: Math.max(1, Number(q.page) || 1),
+    pageSize: Math.min(100, Math.max(1, Number(q.pageSize) || 20)),
+    status: q.status as never,
+    categoryId: q.categoryId || undefined,
+  });
   res.json({ success: true, data: result.items, pagination: result.pagination });
 });
 

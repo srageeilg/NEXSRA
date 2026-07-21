@@ -6,7 +6,17 @@ import * as productService from "../services/product.service";
 import { resolveUploadedFileUrl } from "../services/storage.service";
 
 export const listProducts = asyncHandler(async (req: Request, res: Response) => {
-  const result = await productService.listProducts(req.user!.businessId!, req.query as never);
+  const q = req.query as Record<string, string | undefined>;
+  const result = await productService.listProducts(req.user!.businessId!, {
+    page: Math.max(1, Number(q.page) || 1),
+    pageSize: Math.min(100, Math.max(1, Number(q.pageSize) || 20)),
+    search: q.search || undefined,
+    categoryId: q.categoryId || undefined,
+    brandId: q.brandId || undefined,
+    isActive: q.isActive === "true" ? true : q.isActive === "false" ? false : undefined,
+    sortBy: (["name", "createdAt", "sellingPrice"].includes(q.sortBy ?? "") ? q.sortBy : "createdAt") as "name" | "createdAt" | "sellingPrice",
+    sortOrder: (q.sortOrder === "asc" ? "asc" : "desc") as "asc" | "desc",
+  });
   res.json({ success: true, data: result.items, pagination: result.pagination });
 });
 

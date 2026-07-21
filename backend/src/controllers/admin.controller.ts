@@ -23,7 +23,12 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const listAuditLogs = asyncHandler(async (req: Request, res: Response) => {
-  const result = await adminService.listAuditLogs(req.query as never);
+  const q = req.query as Record<string, string | undefined>;
+  const result = await adminService.listAuditLogs({
+    page: Math.max(1, Number(q.page) || 1),
+    pageSize: Math.min(100, Math.max(1, Number(q.pageSize) || 20)),
+    businessId: q.businessId || undefined,
+  });
   res.json({ success: true, data: result.items, pagination: result.pagination });
 });
 

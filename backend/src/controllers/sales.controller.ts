@@ -3,7 +3,13 @@ import { asyncHandler } from "../utils/asyncHandler";
 import * as salesService from "../services/sales.service";
 
 export const listSalesOrders = asyncHandler(async (req: Request, res: Response) => {
-  const result = await salesService.listSalesOrders(req.user!.businessId!, req.query as never);
+  const q = req.query as Record<string, string | undefined>;
+  const result = await salesService.listSalesOrders(req.user!.businessId!, {
+    page: Math.max(1, Number(q.page) || 1),
+    pageSize: Math.min(100, Math.max(1, Number(q.pageSize) || 20)),
+    status: q.status as never,
+    customerId: q.customerId || undefined,
+  });
   res.json({ success: true, data: result.items, pagination: result.pagination });
 });
 

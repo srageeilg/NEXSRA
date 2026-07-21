@@ -13,7 +13,11 @@ export const createAccount = asyncHandler(async (req: Request, res: Response) =>
 });
 
 export const listJournalEntries = asyncHandler(async (req: Request, res: Response) => {
-  const result = await accountingService.listJournalEntries(req.user!.businessId!, req.query as never);
+  const q = req.query as Record<string, string | undefined>;
+  const result = await accountingService.listJournalEntries(req.user!.businessId!, {
+    page: Math.max(1, Number(q.page) || 1),
+    pageSize: Math.min(100, Math.max(1, Number(q.pageSize) || 20)),
+  });
   res.json({ success: true, data: result.items, pagination: result.pagination });
 });
 

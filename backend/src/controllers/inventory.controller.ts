@@ -3,12 +3,25 @@ import { asyncHandler } from "../utils/asyncHandler";
 import * as inventoryService from "../services/inventory.service";
 
 export const listStock = asyncHandler(async (req: Request, res: Response) => {
-  const result = await inventoryService.listStock(req.user!.businessId!, req.query as never);
+  const q = req.query as Record<string, string | undefined>;
+  const result = await inventoryService.listStock(req.user!.businessId!, {
+    page: Math.max(1, Number(q.page) || 1),
+    pageSize: Math.min(200, Math.max(1, Number(q.pageSize) || 50)),
+    warehouseId: q.warehouseId || undefined,
+    productId: q.productId || undefined,
+    lowStockOnly: q.lowStockOnly === "true",
+  });
   res.json({ success: true, data: result.items, pagination: result.pagination });
 });
 
 export const listMovements = asyncHandler(async (req: Request, res: Response) => {
-  const result = await inventoryService.listMovements(req.user!.businessId!, req.query as never);
+  const q = req.query as Record<string, string | undefined>;
+  const result = await inventoryService.listMovements(req.user!.businessId!, {
+    page: Math.max(1, Number(q.page) || 1),
+    pageSize: Math.min(200, Math.max(1, Number(q.pageSize) || 50)),
+    warehouseId: q.warehouseId || undefined,
+    productId: q.productId || undefined,
+  });
   res.json({ success: true, data: result.items, pagination: result.pagination });
 });
 

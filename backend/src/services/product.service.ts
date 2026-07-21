@@ -80,8 +80,8 @@ export async function listProducts(
       include: {
         category: { select: { id: true, name: true } },
         brand: { select: { id: true, name: true } },
-        unit: { select: { id: true, name: true } },
-        images: { orderBy: { sortOrder: "asc" }, select: { id: true, url: true, sortOrder: true } },
+        unit: { select: { id: true, name: true, shortCode: true } },
+        images: { orderBy: { sortOrder: "asc" }, select: { id: true, url: true, isPrimary: true, sortOrder: true } },
         stocks: { select: { quantity: true } },
       },
       orderBy: { [params.sortBy]: params.sortOrder },

@@ -22,6 +22,15 @@ export async function createJournalEntry(
   businessId: string,
   data: { description: string; reference?: string; entryDate?: Date; lines: JournalLineInput[] },
 ) {
+  const totalDebits = data.lines.filter((l) => l.type === "DEBIT").reduce((sum, l) => sum + l.amount, 0);
+  const totalCredits = data.lines.filter((l) => l.type === "CREDIT").reduce((sum, l) => sum + l.amount, 0);
+  if (Math.abs(totalDebits - totalCredits) > 0.01) {
+    throw ApiError.badRequest(`Journal entry is unbalanced: debits ${totalDebits.toFixed(2)} ≠ credits ${totalCredits.toFixed(2)}`);
+  }
+  if (data.lines.length < 2) {
+    throw ApiError.badRequest("A journal entry requires at least two lines");
+  }
+
   return prisma.$transaction(async (tx) => {
     const entry = await tx.journalEntry.create({
       data: {

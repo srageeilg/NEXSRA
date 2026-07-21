@@ -3,7 +3,12 @@ import { asyncHandler } from "../utils/asyncHandler";
 import * as supplierService from "../services/supplier.service";
 
 export const listSuppliers = asyncHandler(async (req: Request, res: Response) => {
-  const result = await supplierService.listSuppliers(req.user!.businessId!, req.query as never);
+  const q = req.query as Record<string, string | undefined>;
+  const result = await supplierService.listSuppliers(req.user!.businessId!, {
+    page: Math.max(1, Number(q.page) || 1),
+    pageSize: Math.min(100, Math.max(1, Number(q.pageSize) || 20)),
+    search: q.search || undefined,
+  });
   res.json({ success: true, data: result.items, pagination: result.pagination });
 });
 
