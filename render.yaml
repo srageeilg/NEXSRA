@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: nexsra-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install && npm run build && npx prisma generate
+    startCommand: node dist/server.js
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: COOKIE_SECRET
+        generateValue: true
+      - key: CLIENT_URL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
