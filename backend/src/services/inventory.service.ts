@@ -179,6 +179,7 @@ interface AdjustmentInput {
 }
 
 export async function adjustStock(businessId: string, input: AdjustmentInput) {
+  if (input.newQuantity < 0) throw ApiError.badRequest("Stock quantity cannot be negative");
   await assertProductBelongsToBusiness(businessId, input.productId);
   await assertWarehouseBelongsToBusiness(businessId, input.warehouseId);
 

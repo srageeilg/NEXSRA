@@ -11,6 +11,7 @@ export interface PurchaseOrderItem {
   quantityReceived: number;
   unitCost: string;
   total: string;
+  product: { id: string; name: string; sku: string };
 }
 
 export interface PurchaseOrder {

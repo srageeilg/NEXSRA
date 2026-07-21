@@ -68,10 +68,10 @@ export function ReceiveGoodsDialog({ purchaseOrder }: { purchaseOrder: PurchaseO
             const remaining = item.quantityOrdered - item.quantityReceived;
             return (
               <div key={item.id} className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium">Item</p>
-                  <p className="text-xs text-muted-foreground">
-                    Ordered {item.quantityOrdered}, received {item.quantityReceived}, remaining {remaining}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{item.product.name}</p>
+                  <p className="font-mono text-xs text-muted-foreground">
+                    {item.product.sku} · ordered {item.quantityOrdered}, received {item.quantityReceived}, remaining {remaining}
                   </p>
                 </div>
                 <div className="w-28 space-y-1">

@@ -134,11 +134,12 @@ export default function PosPage() {
 
           <div className="space-y-2">
             <Label>Customer (optional)</Label>
-            <Select onValueChange={setCustomerId} value={customerId}>
+            <Select onValueChange={(v) => setCustomerId(v === "__walkin__" ? undefined : v)} value={customerId ?? "__walkin__"}>
               <SelectTrigger>
-                <SelectValue placeholder="Walk-in customer" />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="__walkin__">Walk-in customer</SelectItem>
                 {customersData?.data.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.name}

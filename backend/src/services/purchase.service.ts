@@ -91,7 +91,7 @@ export async function listPurchaseOrders(
   const [items, total] = await Promise.all([
     prisma.purchaseOrder.findMany({
       where,
-      include: { supplier: true, warehouse: true, items: true },
+      include: { supplier: true, warehouse: true, items: { include: { product: { select: { id: true, name: true, sku: true } } } } },
       orderBy: { createdAt: "desc" },
       skip: (params.page - 1) * params.pageSize,
       take: params.pageSize,
