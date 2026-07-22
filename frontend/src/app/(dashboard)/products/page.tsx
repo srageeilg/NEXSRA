@@ -191,7 +191,7 @@ export default function ProductsPage() {
       />
 
       <EditProductDialog
-        product={editProduct!}
+        product={editProduct}
         open={!!editProduct}
         onOpenChange={(o) => { if (!o) setEditProduct(null); }}
       />

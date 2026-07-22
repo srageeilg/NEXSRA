@@ -122,7 +122,7 @@ function InlineCombobox({
 }
 
 interface Props {
-  product: Product;
+  product: Product | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -138,20 +138,20 @@ export function EditProductDialog({ product, open, onOpenChange }: Props) {
   const { register, handleSubmit, control, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      name: product.name,
-      sku: product.sku,
-      categoryId: product.category?.id,
-      brandId: product.brand?.id,
-      unitId: product.unit?.id,
-      purchasePrice: parseFloat(product.purchasePrice),
-      sellingPrice: parseFloat(product.sellingPrice),
-      lowStockThreshold: product.lowStockThreshold,
-      isActive: product.isActive,
+      name: product?.name ?? "",
+      sku: product?.sku,
+      categoryId: product?.category?.id,
+      brandId: product?.brand?.id,
+      unitId: product?.unit?.id,
+      purchasePrice: product ? parseFloat(product.purchasePrice) : 0,
+      sellingPrice: product ? parseFloat(product.sellingPrice) : 0,
+      lowStockThreshold: product?.lowStockThreshold ?? 0,
+      isActive: product?.isActive ?? true,
     },
   });
 
   useEffect(() => {
-    if (open) {
+    if (open && product) {
       reset({
         name: product.name,
         sku: product.sku,
@@ -167,6 +167,7 @@ export function EditProductDialog({ product, open, onOpenChange }: Props) {
   }, [open, product, reset]);
 
   const onSubmit = (values: FormValues) => {
+    if (!product) return;
     updateProduct.mutate({ id: product.id, ...values }, {
       onSuccess: () => onOpenChange(false),
     });
