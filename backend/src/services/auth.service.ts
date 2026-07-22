@@ -36,52 +36,55 @@ export async function registerBusiness(input: RegisterBusinessInput) {
   const slug = await generateUniqueSlug(input.businessName);
   const emailVerifyToken = generateRandomToken();
 
-  const result = await prisma.$transaction(async (tx) => {
-    await ensurePermissionsSeeded(tx);
+  await ensurePermissionsSeeded(prisma);
 
-    const business = await tx.business.create({
-      data: {
-        name: input.businessName,
-        slug,
-        email: input.email,
-      },
-    });
+  const result = await prisma.$transaction(
+    async (tx) => {
+      const business = await tx.business.create({
+        data: {
+          name: input.businessName,
+          slug,
+          email: input.email,
+        },
+      });
 
-    // Seed default role definitions with their permission sets for this business.
-    const roleDefinitions = await Promise.all(
-      Object.values(SystemRole).map(async (role) => {
-        const permissionKeys = DEFAULT_ROLE_PERMISSIONS[role];
-        return tx.roleDefinition.create({
-          data: {
-            businessId: business.id,
-            name: role,
-            isSystemRole: true,
-            description: `Default permissions for ${role.replace(/_/g, " ")}`,
-            permissions: { connect: permissionKeys.map((key) => ({ key })) },
-          },
-        });
-      }),
-    );
+      // Seed default role definitions with their permission sets for this business.
+      const roleDefinitions = await Promise.all(
+        Object.values(SystemRole).map(async (role) => {
+          const permissionKeys = DEFAULT_ROLE_PERMISSIONS[role];
+          return tx.roleDefinition.create({
+            data: {
+              businessId: business.id,
+              name: role,
+              isSystemRole: true,
+              description: `Default permissions for ${role.replace(/_/g, " ")}`,
+              permissions: { connect: permissionKeys.map((key) => ({ key })) },
+            },
+          });
+        }),
+      );
 
-    const ownerRole = roleDefinitions.find((r) => r.name === SystemRole.BUSINESS_OWNER)!;
+      const ownerRole = roleDefinitions.find((r) => r.name === SystemRole.BUSINESS_OWNER)!;
 
-    const user = await tx.user.create({
-      data: {
-        email: input.email,
-        password: passwordHash,
-        firstName: input.firstName,
-        lastName: input.lastName,
-        phone: input.phone,
-        role: SystemRole.BUSINESS_OWNER,
-        businessId: business.id,
-        roleAssignmentId: ownerRole.id,
-        emailVerifyToken,
-        emailVerifyExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      },
-    });
+      const user = await tx.user.create({
+        data: {
+          email: input.email,
+          password: passwordHash,
+          firstName: input.firstName,
+          lastName: input.lastName,
+          phone: input.phone,
+          role: SystemRole.BUSINESS_OWNER,
+          businessId: business.id,
+          roleAssignmentId: ownerRole.id,
+          emailVerifyToken,
+          emailVerifyExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+      });
 
-    return { business, user };
-  });
+      return { business, user };
+    },
+    { timeout: 15000 },
+  );
 
   const verifyUrl = `${env.clientUrl}/verify-email?token=${emailVerifyToken}`;
   await sendEmail({
@@ -105,10 +108,10 @@ async function generateUniqueSlug(name: string): Promise<string> {
   }
 }
 
-async function ensurePermissionsSeeded(tx: Prisma.TransactionClient) {
-  const count = await tx.permission.count();
+async function ensurePermissionsSeeded(client: Prisma.TransactionClient | typeof prisma) {
+  const count = await client.permission.count();
   if (count > 0) return;
-  await tx.permission.createMany({ data: ALL_PERMISSIONS, skipDuplicates: true });
+  await client.permission.createMany({ data: ALL_PERMISSIONS, skipDuplicates: true });
 }
 
 export async function verifyEmail(token: string) {
