@@ -16,6 +16,7 @@ export const env = {
   isProd: process.env.NODE_ENV === "production",
   port: Number(process.env.PORT ?? 5000),
   clientUrl: process.env.CLIENT_URL ?? "http://localhost:3000",
+  allowPublicRegistration: process.env.ALLOW_PUBLIC_REGISTRATION === "true",
 
   databaseUrl: required("DATABASE_URL"),
   redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379",

@@ -248,6 +248,9 @@ model Business {
   approvedAt   DateTime?
   approvedById String?
 
+  planName      String    @default("TRIAL")
+  planExpiresAt DateTime?
+
   currency        String @default("NPR")
   timezone        String @default("UTC")
   fiscalYearStart Int    @default(1)

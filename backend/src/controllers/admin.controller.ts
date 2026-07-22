@@ -2,6 +2,21 @@ import { Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler";
 import * as adminService from "../services/admin.service";
 
+export const createBusiness = asyncHandler(async (req: Request, res: Response) => {
+  const result = await adminService.createBusiness(req.body);
+  res.status(201).json({ success: true, data: result });
+});
+
+export const updateBusinessPlan = asyncHandler(async (req: Request, res: Response) => {
+  const business = await adminService.updateBusinessPlan(req.params.id, req.body);
+  res.json({ success: true, data: business });
+});
+
+export const resetUserPassword = asyncHandler(async (req: Request, res: Response) => {
+  await adminService.resetUserPassword(req.params.id, req.body.newPassword);
+  res.json({ success: true, message: "Password reset successfully" });
+});
+
 export const listBusinesses = asyncHandler(async (req: Request, res: Response) => {
   const businesses = await adminService.listBusinesses(req.query.status as never);
   res.json({ success: true, data: businesses });

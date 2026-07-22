@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { authenticator } from "otplib";
 import qrcode from "qrcode";
-import { Prisma, SystemRole } from "@prisma/client";
+import { BusinessStatus, Prisma, SystemRole } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { ApiError } from "../utils/ApiError";
 import {
@@ -29,22 +29,72 @@ interface RegisterBusinessInput {
 }
 
 export async function registerBusiness(input: RegisterBusinessInput) {
+  if (!env.allowPublicRegistration) {
+    throw ApiError.forbidden("Public registration is disabled. Please contact your platform administrator for access.");
+  }
+
   const existing = await prisma.user.findUnique({ where: { email: input.email } });
   if (existing) throw ApiError.conflict("An account with this email already exists");
 
-  const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
-  const slug = await generateUniqueSlug(input.businessName);
+  const passwordHash = await hashPassword(input.password);
   const emailVerifyToken = generateRandomToken();
 
+  const result = await createBusinessWithOwner({
+    businessName: input.businessName,
+    ownerFirstName: input.firstName,
+    ownerLastName: input.lastName,
+    ownerEmail: input.email,
+    passwordHash,
+    phone: input.phone,
+    emailVerifyToken,
+    emailVerifyExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+  });
+
+  const verifyUrl = `${env.clientUrl}/verify-email?token=${emailVerifyToken}`;
+  await sendEmail({
+    to: input.email,
+    subject: "Verify your NEXSRA account",
+    html: verificationEmailTemplate(input.firstName, verifyUrl),
+  });
+
+  return { businessId: result.business.id, userId: result.user.id };
+}
+
+export async function hashPassword(password: string) {
+  return bcrypt.hash(password, BCRYPT_ROUNDS);
+}
+
+interface CreateBusinessWithOwnerInput {
+  businessName: string;
+  ownerFirstName: string;
+  ownerLastName: string;
+  ownerEmail: string;
+  passwordHash: string;
+  phone?: string;
+  status?: BusinessStatus;
+  isEmailVerified?: boolean;
+  emailVerifyToken?: string | null;
+  emailVerifyExpires?: Date | null;
+  planName?: string;
+  planExpiresAt?: Date | null;
+}
+
+/** Shared by public self-registration and admin-created businesses: creates the business,
+ * seeds its default role definitions with permissions, and creates the owner user. */
+export async function createBusinessWithOwner(input: CreateBusinessWithOwnerInput) {
+  const slug = await generateUniqueSlug(input.businessName);
   await ensurePermissionsSeeded(prisma);
 
-  const result = await prisma.$transaction(
+  return prisma.$transaction(
     async (tx) => {
       const business = await tx.business.create({
         data: {
           name: input.businessName,
           slug,
-          email: input.email,
+          email: input.ownerEmail,
+          status: input.status ?? "PENDING",
+          planName: input.planName ?? "TRIAL",
+          planExpiresAt: input.planExpiresAt ?? null,
         },
       });
 
@@ -68,16 +118,17 @@ export async function registerBusiness(input: RegisterBusinessInput) {
 
       const user = await tx.user.create({
         data: {
-          email: input.email,
-          password: passwordHash,
-          firstName: input.firstName,
-          lastName: input.lastName,
+          email: input.ownerEmail,
+          password: input.passwordHash,
+          firstName: input.ownerFirstName,
+          lastName: input.ownerLastName,
           phone: input.phone,
           role: SystemRole.BUSINESS_OWNER,
           businessId: business.id,
           roleAssignmentId: ownerRole.id,
-          emailVerifyToken,
-          emailVerifyExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          isEmailVerified: input.isEmailVerified ?? false,
+          emailVerifyToken: input.emailVerifyToken,
+          emailVerifyExpires: input.emailVerifyExpires,
         },
       });
 
@@ -85,15 +136,6 @@ export async function registerBusiness(input: RegisterBusinessInput) {
     },
     { timeout: 15000 },
   );
-
-  const verifyUrl = `${env.clientUrl}/verify-email?token=${emailVerifyToken}`;
-  await sendEmail({
-    to: input.email,
-    subject: "Verify your NEXSRA account",
-    html: verificationEmailTemplate(input.firstName, verifyUrl),
-  });
-
-  return { businessId: result.business.id, userId: result.user.id };
 }
 
 async function generateUniqueSlug(name: string): Promise<string> {
@@ -135,11 +177,20 @@ interface LoginInput {
 }
 
 export async function login(input: LoginInput) {
-  const user = await prisma.user.findUnique({ where: { email: input.email } });
+  const user = await prisma.user.findUnique({ where: { email: input.email }, include: { business: true } });
   if (!user || !user.isActive) throw ApiError.unauthorized("Invalid email or password");
 
   const passwordValid = await bcrypt.compare(input.password, user.password);
   if (!passwordValid) throw ApiError.unauthorized("Invalid email or password");
+
+  if (user.business) {
+    if (user.business.status === "SUSPENDED") {
+      throw ApiError.unauthorized("Your business account has been suspended. Please contact support.");
+    }
+    if (user.business.planExpiresAt && user.business.planExpiresAt < new Date()) {
+      throw ApiError.unauthorized("Your subscription has expired. Please contact support to renew your plan.");
+    }
+  }
 
   if (user.twoFactorEnabled) {
     if (!input.twoFactorCode) {

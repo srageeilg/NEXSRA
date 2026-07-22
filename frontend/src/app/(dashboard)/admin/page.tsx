@@ -16,7 +16,16 @@ import {
   useUpdateAdminUser,
   useAuditLogs,
 } from "@/hooks/use-admin";
+import { CreateBusinessDialog } from "@/components/admin/create-business-dialog";
+import { UpdatePlanDialog } from "@/components/admin/update-plan-dialog";
+import { ResetPasswordDialog } from "@/components/admin/reset-password-dialog";
 import { formatDate } from "@/lib/utils";
+
+function formatPlanExpiry(planExpiresAt: string | null) {
+  if (!planExpiresAt) return "No expiry";
+  const expired = new Date(planExpiresAt) < new Date();
+  return `${expired ? "Expired " : "Expires "}${formatDate(planExpiresAt)}`;
+}
 
 const BUSINESS_STATUS_VARIANT: Record<string, "success" | "destructive" | "warning" | "secondary"> = {
   APPROVED: "success",
@@ -46,9 +55,12 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Admin panel</h1>
-        <p className="text-sm text-muted-foreground">Business approvals, user management, and system audit logs.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Admin panel</h1>
+          <p className="text-sm text-muted-foreground">Client businesses, plans, user access, and system audit logs.</p>
+        </div>
+        <CreateBusinessDialog />
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -109,8 +121,9 @@ export default function AdminPage() {
                       <TableHead>Business</TableHead>
                       <TableHead>Users</TableHead>
                       <TableHead>Products</TableHead>
+                      <TableHead>Plan</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="w-56" />
+                      <TableHead className="w-72" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -123,10 +136,15 @@ export default function AdminPage() {
                         <TableCell>{b._count.users}</TableCell>
                         <TableCell>{b._count.products}</TableCell>
                         <TableCell>
+                          <p className="font-medium">{b.planName}</p>
+                          <p className="text-xs text-muted-foreground">{formatPlanExpiry(b.planExpiresAt)}</p>
+                        </TableCell>
+                        <TableCell>
                           <Badge variant={BUSINESS_STATUS_VARIANT[b.status]}>{b.status}</Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2">
+                            <UpdatePlanDialog business={b} />
                             {b.status !== "APPROVED" && (
                               <Button size="sm" variant="outline" onClick={() => updateBusinessStatus.mutate({ id: b.id, status: "APPROVED" })}>
                                 Approve
@@ -161,7 +179,7 @@ export default function AdminPage() {
                       <TableHead>Business</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="w-32" />
+                      <TableHead className="w-60" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -181,13 +199,16 @@ export default function AdminPage() {
                           <Badge variant={u.isActive ? "success" : "destructive"}>{u.isActive ? "Active" : "Disabled"}</Badge>
                         </TableCell>
                         <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => updateUser.mutate({ id: u.id, isActive: !u.isActive })}
-                          >
-                            {u.isActive ? "Disable" : "Enable"}
-                          </Button>
+                          <div className="flex flex-wrap gap-2">
+                            <ResetPasswordDialog user={u} />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => updateUser.mutate({ id: u.id, isActive: !u.isActive })}
+                            >
+                              {u.isActive ? "Disable" : "Enable"}
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

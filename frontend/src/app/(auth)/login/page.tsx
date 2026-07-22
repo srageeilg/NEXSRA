@@ -71,13 +71,6 @@ export default function LoginPage() {
             {login.isPending ? "Signing in..." : "Sign in"}
           </Button>
         </form>
-
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          Don&apos;t have a business account?{" "}
-          <Link href="/register" className="text-primary hover:underline">
-            Register your business
-          </Link>
-        </p>
       </CardContent>
     </Card>
   );

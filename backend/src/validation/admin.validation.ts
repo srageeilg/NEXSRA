@@ -21,6 +21,31 @@ export const updateUserSchema = z.object({
   params: z.object({ id: z.string().uuid() }),
 });
 
+export const createBusinessSchema = z.object({
+  body: z.object({
+    businessName: z.string().min(1),
+    ownerFirstName: z.string().min(1),
+    ownerLastName: z.string().min(1),
+    ownerEmail: z.string().email(),
+    ownerPassword: z.string().min(8),
+    planName: z.string().min(1).optional(),
+    planExpiresAt: z.coerce.date().optional(),
+  }),
+});
+
+export const updateBusinessPlanSchema = z.object({
+  body: z.object({
+    planName: z.string().min(1).optional(),
+    planExpiresAt: z.coerce.date().nullable().optional(),
+  }),
+  params: z.object({ id: z.string().uuid() }),
+});
+
+export const resetUserPasswordSchema = z.object({
+  body: z.object({ newPassword: z.string().min(8) }),
+  params: z.object({ id: z.string().uuid() }),
+});
+
 export const listAuditLogsQuerySchema = z.object({
   query: z.object({
     businessId: z.string().uuid().optional(),

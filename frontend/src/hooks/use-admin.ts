@@ -9,6 +9,8 @@ export interface AdminBusiness {
   name: string;
   email: string;
   status: "PENDING" | "APPROVED" | "SUSPENDED" | "REJECTED";
+  planName: string;
+  planExpiresAt: string | null;
   createdAt: string;
   _count: { users: number; products: number };
 }
@@ -52,6 +54,52 @@ export function useAdminBusinesses() {
   return useQuery({
     queryKey: ["admin-businesses"],
     queryFn: async () => (await apiClient.get<ApiResponse<AdminBusiness[]>>("/admin/businesses")).data.data,
+  });
+}
+
+export interface CreateBusinessInput {
+  businessName: string;
+  ownerFirstName: string;
+  ownerLastName: string;
+  ownerEmail: string;
+  ownerPassword: string;
+  planName?: string;
+  planExpiresAt?: string;
+}
+
+export function useCreateBusiness() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateBusinessInput) =>
+      (await apiClient.post<ApiResponse<{ businessId: string; userId: string }>>("/admin/businesses", input)).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-businesses"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-stats"] });
+      toast.success("Business created — share the login credentials with your client");
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message ?? "Failed to create business"),
+  });
+}
+
+export function useUpdateBusinessPlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, planName, planExpiresAt }: { id: string; planName: string; planExpiresAt: string | null }) =>
+      (await apiClient.patch<ApiResponse<AdminBusiness>>(`/admin/businesses/${id}/plan`, { planName, planExpiresAt })).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-businesses"] });
+      toast.success("Plan updated");
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message ?? "Failed to update plan"),
+  });
+}
+
+export function useResetUserPassword() {
+  return useMutation({
+    mutationFn: async ({ id, newPassword }: { id: string; newPassword: string }) =>
+      (await apiClient.post<ApiResponse<null>>(`/admin/users/${id}/reset-password`, { newPassword })).data,
+    onSuccess: () => toast.success("Password reset — share the new password with the user"),
+    onError: (err: any) => toast.error(err?.response?.data?.message ?? "Failed to reset password"),
   });
 }
 
