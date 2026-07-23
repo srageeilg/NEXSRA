@@ -99,7 +99,8 @@ export async function posCheckout(businessId: string, input: PosCheckoutInput, c
   const totals = computeTotals(input.items, input.discountTotal ?? 0);
   const amountPaid = input.payments.reduce((sum, p) => sum + p.amount, 0);
 
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(
+    async (tx) => {
     const orderNumber = await nextSequenceNumber(tx, "salesOrder", businessId, "SO");
 
     const order = await tx.salesOrder.create({
@@ -210,7 +211,9 @@ export async function posCheckout(businessId: string, input: PosCheckoutInput, c
     }
 
     return { order, invoice };
-  });
+    },
+    { timeout: 15000 },
+  );
 }
 
 export async function listSalesOrders(

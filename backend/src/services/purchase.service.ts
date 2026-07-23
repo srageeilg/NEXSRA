@@ -124,7 +124,8 @@ interface ReceiveGoodsInput {
 }
 
 export async function receiveGoods(businessId: string, poId: string, input: ReceiveGoodsInput, performedById?: string) {
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(
+    async (tx) => {
     const po = await tx.purchaseOrder.findFirst({ where: { id: poId, businessId }, include: { items: true } });
     if (!po) throw ApiError.notFound("Purchase order not found");
     if (po.status === "RECEIVED" || po.status === "CANCELLED") {
@@ -175,5 +176,7 @@ export async function receiveGoods(businessId: string, poId: string, input: Rece
       data: { status: allReceived ? "RECEIVED" : someReceived ? "PARTIALLY_RECEIVED" : po.status },
       include: { items: true },
     });
-  });
+    },
+    { timeout: 15000 },
+  );
 }

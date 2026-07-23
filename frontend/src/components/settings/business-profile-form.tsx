@@ -12,7 +12,10 @@ import { useBusinessProfile, useUpdateBusinessProfile, type BusinessProfile } fr
 import { WORLD_CURRENCIES } from "@/lib/currencies";
 import { cn } from "@/lib/utils";
 
-type FormValues = Pick<BusinessProfile, "name" | "phone" | "address" | "website" | "currency" | "timezone" | "invoicePrefix">;
+type FormValues = Pick<
+  BusinessProfile,
+  "name" | "phone" | "address" | "website" | "currency" | "timezone" | "invoicePrefix" | "panNumber"
+>;
 
 export function BusinessProfileForm() {
   const { data: profile, isLoading } = useBusinessProfile();
@@ -32,6 +35,7 @@ export function BusinessProfileForm() {
         currency: profile.currency,
         timezone: profile.timezone,
         invoicePrefix: profile.invoicePrefix,
+        panNumber: profile.panNumber ?? "",
       });
     }
   }, [profile, reset]);
@@ -155,6 +159,12 @@ export function BusinessProfileForm() {
               <Label htmlFor="invoicePrefix">Invoice prefix</Label>
               <Input id="invoicePrefix" {...register("invoicePrefix")} />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="panNumber">PAN number</Label>
+            <Input id="panNumber" placeholder="e.g. 123456789" {...register("panNumber")} />
+            <p className="text-xs text-muted-foreground">Printed on tax invoices you generate from NEXSRA.</p>
           </div>
 
           <Button type="submit" disabled={updateProfile.isPending}>

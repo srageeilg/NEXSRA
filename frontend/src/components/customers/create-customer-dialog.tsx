@@ -61,6 +61,10 @@ export function CreateCustomerDialog() {
             <Label htmlFor="address">Address</Label>
             <Input id="address" {...register("address")} />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="panNumber">PAN number (optional)</Label>
+            <Input id="panNumber" placeholder="e.g. 987654321" {...register("panNumber")} />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="creditLimit">Credit limit</Label>

@@ -62,6 +62,7 @@ interface CustomerInput {
   email?: string;
   phone?: string;
   address?: string;
+  panNumber?: string;
   creditLimit?: number;
   openingBalance?: number;
 }

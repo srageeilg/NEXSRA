@@ -247,6 +247,7 @@ model Business {
   status       BusinessStatus @default(PENDING)
   approvedAt   DateTime?
   approvedById String?
+  panNumber    String?
 
   planName      String    @default("TRIAL")
   planExpiresAt DateTime?
@@ -813,6 +814,7 @@ model Customer {
   email          String?
   phone          String?
   address        String?
+  panNumber      String?
   creditLimit    Decimal  @default(0) @db.Decimal(14, 2)
   loyaltyPoints  Int      @default(0)
   openingBalance Decimal  @default(0) @db.Decimal(14, 2)

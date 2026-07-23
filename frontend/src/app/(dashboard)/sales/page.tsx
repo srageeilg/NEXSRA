@@ -12,6 +12,7 @@ import { useProducts, type Product } from "@/hooks/use-products";
 import { useWarehouses } from "@/hooks/use-warehouses";
 import { useCustomers } from "@/hooks/use-customers";
 import { usePosCheckout, type CartItem } from "@/hooks/use-sales";
+import { downloadInvoicePdf } from "@/hooks/use-invoices";
 import { formatCurrency } from "@/lib/utils";
 
 interface CartLine extends CartItem {
@@ -65,7 +66,12 @@ export default function PosPage() {
         items: cart.map(({ productId, quantity, unitPrice }) => ({ productId, quantity, unitPrice })),
         payments: [{ method: paymentMethod, amount: subTotal }],
       },
-      { onSuccess: () => setCart([]) },
+      {
+        onSuccess: (data) => {
+          setCart([]);
+          downloadInvoicePdf(data.data.invoice.id, data.data.invoice.invoiceNumber);
+        },
+      },
     );
   };
 

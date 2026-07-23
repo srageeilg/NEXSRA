@@ -12,6 +12,7 @@ export const updateBusinessProfileSchema = z.object({
     fiscalYearStart: z.coerce.number().int().min(1).max(12).optional(),
     invoicePrefix: z.string().max(10).optional(),
     invoiceTemplate: z.string().max(30).optional(),
+    panNumber: z.string().max(30).optional(),
   }),
 });
 

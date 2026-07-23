@@ -10,6 +10,7 @@ export interface Customer {
   email: string | null;
   phone: string | null;
   address: string | null;
+  panNumber: string | null;
   creditLimit: string;
   loyaltyPoints: number;
   isActive: boolean;
@@ -36,6 +37,7 @@ export interface CreateCustomerInput {
   email?: string;
   phone?: string;
   address?: string;
+  panNumber?: string;
   creditLimit?: number;
   openingBalance?: number;
 }

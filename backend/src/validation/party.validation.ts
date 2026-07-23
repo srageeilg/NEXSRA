@@ -22,6 +22,7 @@ export const createCustomerSchema = z.object({
     email: z.string().email().optional(),
     phone: z.string().max(30).optional(),
     address: z.string().max(300).optional(),
+    panNumber: z.string().max(30).optional(),
     creditLimit: z.coerce.number().nonnegative().default(0),
     openingBalance: z.coerce.number().default(0),
   }),

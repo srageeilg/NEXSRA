@@ -19,6 +19,7 @@ interface FormValues {
   email: string;
   phone: string;
   address: string;
+  panNumber: string;
   creditLimit: number;
 }
 
@@ -36,6 +37,7 @@ export function EditCustomerDialog({ customer, open, onOpenChange }: Props) {
       email: customer.email ?? "",
       phone: customer.phone ?? "",
       address: customer.address ?? "",
+      panNumber: customer.panNumber ?? "",
       creditLimit: parseFloat(customer.creditLimit) || 0,
     },
   });
@@ -80,6 +82,10 @@ export function EditCustomerDialog({ customer, open, onOpenChange }: Props) {
           <div className="space-y-2">
             <Label>Address</Label>
             <Input {...register("address")} />
+          </div>
+          <div className="space-y-2">
+            <Label>PAN number</Label>
+            <Input {...register("panNumber")} />
           </div>
           <div className="space-y-2">
             <Label>Credit limit</Label>
