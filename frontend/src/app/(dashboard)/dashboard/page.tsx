@@ -4,6 +4,10 @@ import { memo } from "react";
 import { motion } from "framer-motion";
 import {
   DollarSign,
+  IndianRupee,
+  Euro,
+  PoundSterling,
+  Banknote,
   TrendingUp,
   Package,
   AlertTriangle,
@@ -51,6 +55,22 @@ const STATUS_CONFIG: Record<string, { label: string; variant: "default" | "secon
 
 const DONUT_COLORS = ["#10b981", "#3b82f6", "#8b5cf6", "#f59e0b", "#ef4444"];
 
+function getCurrencyIcon(currency?: string) {
+  switch (currency) {
+    case "NPR":
+    case "INR":
+      return IndianRupee;
+    case "EUR":
+      return Euro;
+    case "GBP":
+      return PoundSterling;
+    case "USD":
+      return DollarSign;
+    default:
+      return Banknote;
+  }
+}
+
 const StatCard = memo(function StatCard({
   label,
   value,
@@ -88,6 +108,7 @@ export default function DashboardPage() {
   const { data, isLoading, isError, refetch } = useDashboardSummary();
   // Capture currency once per render — avoids calling getState() on every chart tick
   const currency = useAuthStore((s) => s.currency);
+  const user = useAuthStore((s) => s.user);
 
   if (isError) {
     return (
@@ -149,27 +170,35 @@ export default function DashboardPage() {
       {/* Header */}
       <motion.div variants={fade} className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {user?.firstName ? `Welcome back, ${user.firstName}` : "Dashboard"}
+          </h1>
           <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
             <Calendar className="h-3.5 w-3.5" />
             {today}
           </p>
         </div>
-        {(data.lowStockCount > 0 || data.outOfStockCount > 0) && (
-          <Badge variant="destructive" className="gap-1">
-            <AlertTriangle className="h-3 w-3" />
-            {data.lowStockCount + data.outOfStockCount} stock alerts
-          </Badge>
-        )}
+        <div className="flex items-center gap-2">
+          {(data.lowStockCount > 0 || data.outOfStockCount > 0) && (
+            <Badge variant="destructive" className="gap-1">
+              <AlertTriangle className="h-3 w-3" />
+              {data.lowStockCount + data.outOfStockCount} stock alerts
+            </Badge>
+          )}
+          <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5">
+            <RefreshCw className="h-3.5 w-3.5" />
+            Refresh
+          </Button>
+        </div>
       </motion.div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <StatCard
           label="Today's Sales"
           value={formatCurrency(data.todaySales)}
           sub="Revenue today"
-          icon={DollarSign}
+          icon={getCurrencyIcon(currency)}
           colorClass="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
         />
         <StatCard
