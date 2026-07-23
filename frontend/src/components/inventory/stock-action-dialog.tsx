@@ -61,7 +61,13 @@ export function StockActionDialog({ mode }: { mode: Mode }) {
   const damaged = useMarkDamaged();
   const returned = useMarkReturned();
 
-  const { register, handleSubmit, control, reset } = useForm<FormValues>();
+  const {
+    register,
+    handleSubmit,
+    control,
+    reset,
+    formState: { errors },
+  } = useForm<FormValues>();
 
   const isTransfer = mode === "transfer";
   const isAdjustment = mode === "adjustment";
@@ -147,6 +153,7 @@ export function StockActionDialog({ mode }: { mode: Mode }) {
                 </Select>
               )}
             />
+            {errors.productId && <p className="text-xs text-destructive">Please select a product.</p>}
           </div>
 
           {isTransfer ? (
@@ -172,6 +179,7 @@ export function StockActionDialog({ mode }: { mode: Mode }) {
                     </Select>
                   )}
                 />
+                {errors.fromWarehouseId && <p className="text-xs text-destructive">Required.</p>}
               </div>
               <div className="space-y-2">
                 <Label>To warehouse</Label>
@@ -194,6 +202,7 @@ export function StockActionDialog({ mode }: { mode: Mode }) {
                     </Select>
                   )}
                 />
+                {errors.toWarehouseId && <p className="text-xs text-destructive">Required.</p>}
               </div>
             </div>
           ) : (
@@ -218,6 +227,7 @@ export function StockActionDialog({ mode }: { mode: Mode }) {
                   </Select>
                 )}
               />
+              {errors.warehouseId && <p className="text-xs text-destructive">Please select a warehouse.</p>}
             </div>
           )}
 
@@ -226,11 +236,13 @@ export function StockActionDialog({ mode }: { mode: Mode }) {
               <div className="space-y-2">
                 <Label htmlFor="newQuantity">New quantity</Label>
                 <Input id="newQuantity" type="number" min={0} {...register("newQuantity", { required: true })} />
+                {errors.newQuantity && <p className="text-xs text-destructive">Required.</p>}
               </div>
             ) : (
               <div className="space-y-2">
                 <Label htmlFor="quantity">Quantity</Label>
                 <Input id="quantity" type="number" min={1} {...register("quantity", { required: true })} />
+                {errors.quantity && <p className="text-xs text-destructive">Required.</p>}
               </div>
             )}
 
@@ -252,6 +264,7 @@ export function StockActionDialog({ mode }: { mode: Mode }) {
           <div className="space-y-2">
             <Label htmlFor="reason">Reason {isAdjustment && "(required)"}</Label>
             <Input id="reason" placeholder="e.g. Stock count correction" {...register("reason", { required: isAdjustment })} />
+            {errors.reason && <p className="text-xs text-destructive">A reason is required for adjustments.</p>}
           </div>
 
           <DialogFooter>
