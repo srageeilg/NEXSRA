@@ -7,7 +7,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="mb-8 flex items-center justify-center">
           <div className="rounded-2xl bg-[#070d0a] px-8 py-4">
             <Image
-              src="/logo.png"
+              src="/logo-dark.png"
               alt="NEXSRA"
               width={160}
               height={48}

@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { ChevronsUpDown, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { NAV_SECTIONS } from "./nav-config";
 import { useAuthStore } from "@/store/auth-store";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Logo } from "@/components/logo";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -18,14 +18,7 @@ export function Sidebar() {
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex">
       <div className="flex h-14 items-center border-b border-sidebar-border px-4">
-        <Image
-          src="/logo.png"
-          alt="NEXSRA"
-          width={120}
-          height={36}
-          className="h-8 w-auto object-contain"
-          priority
-        />
+        <Logo width={120} height={36} className="h-8 w-auto object-contain" priority />
       </div>
 
       <button className="mx-3 mt-3 flex items-center gap-2 rounded-xl border border-sidebar-border bg-sidebar-foreground/[0.03] px-3 py-2.5 text-left transition-colors hover:bg-sidebar-foreground/[0.06]">
