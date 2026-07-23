@@ -24,7 +24,7 @@ export function Topbar() {
   const initials = user ? `${user.firstName[0] ?? ""}${user.lastName[0] ?? ""}`.toUpperCase() : "?";
 
   return (
-    <header className="flex h-14 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur">
+    <header className="flex h-16 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur">
       <div className="relative w-full max-w-sm">
         <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input placeholder="Search... (Ctrl+K)" className="pl-8" />

@@ -17,8 +17,8 @@ export function Sidebar() {
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:flex">
-      <div className="flex h-14 items-center border-b border-sidebar-border px-4">
-        <Logo width={120} height={36} className="h-8 w-auto object-contain" priority />
+      <div className="flex h-16 items-center border-b border-sidebar-border px-4">
+        <Logo width={160} height={48} className="h-11 w-auto object-contain" priority />
       </div>
 
       <button className="mx-3 mt-3 flex items-center gap-2 rounded-xl border border-sidebar-border bg-sidebar-foreground/[0.03] px-3 py-2.5 text-left transition-colors hover:bg-sidebar-foreground/[0.06]">
