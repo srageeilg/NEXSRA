@@ -24,7 +24,7 @@ import { SalesChart } from "@/components/dashboard/sales-chart";
 import { ProfitChart } from "@/components/dashboard/profit-chart";
 import { StockAlerts } from "@/components/dashboard/stock-alerts";
 import { useDashboardSummary } from "@/hooks/use-dashboard";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { cn, formatCurrency, formatDate } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth-store";
 import {
   BarChart,
@@ -91,7 +91,15 @@ const StatCard = memo(function StatCard({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-1">
               <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
-              <p className="truncate text-2xl font-bold tracking-tight">{value}</p>
+              <p
+                className={cn(
+                  "font-bold tracking-tight",
+                  value.length > 16 ? "text-lg" : value.length > 11 ? "text-xl" : "text-2xl",
+                )}
+                title={value}
+              >
+                {value}
+              </p>
               {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
             </div>
             <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${colorClass}`}>
@@ -193,7 +201,7 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
         <StatCard
           label="Today's Sales"
           value={formatCurrency(data.todaySales)}
