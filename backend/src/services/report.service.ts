@@ -27,7 +27,7 @@ export async function getSalesReport(businessId: string, from?: Date, to?: Date)
     invoiceCount: invoices.length,
     rows: invoices.map((i) => ({
       invoiceNumber: i.invoiceNumber,
-      date: i.issueDate,
+      date: i.issueDate.toISOString().slice(0, 10),
       customer: i.customer?.name ?? "Walk-in",
       total: Number(i.grandTotal),
     })),
@@ -51,7 +51,7 @@ export async function getPurchaseReport(businessId: string, from?: Date, to?: Da
     orderCount: orders.length,
     rows: orders.map((o) => ({
       poNumber: o.poNumber,
-      date: o.createdAt,
+      date: o.createdAt.toISOString().slice(0, 10),
       supplier: o.supplier.name,
       status: o.status,
       total: Number(o.grandTotal),
