@@ -53,3 +53,27 @@ export const downloadIncomeStatementPdf = asyncHandler(async (req: Request, res:
   res.setHeader("Content-Disposition", `attachment; filename="income-statement.pdf"`);
   res.send(pdf);
 });
+
+export const downloadVatReturnPdf = asyncHandler(async (req: Request, res: Response) => {
+  const q = req.query as Record<string, string | undefined>;
+  const from = q.from ? new Date(q.from) : undefined;
+  const to = q.to ? new Date(q.to) : undefined;
+  const pdf = await accountingService.generateVatReturnPdf(req.user!.businessId!, from, to);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="vat-return.pdf"`);
+  res.send(pdf);
+});
+
+export const downloadArAgingPdf = asyncHandler(async (req: Request, res: Response) => {
+  const pdf = await accountingService.generateArAgingPdf(req.user!.businessId!);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="ar-aging.pdf"`);
+  res.send(pdf);
+});
+
+export const downloadApAgingPdf = asyncHandler(async (req: Request, res: Response) => {
+  const pdf = await accountingService.generateApAgingPdf(req.user!.businessId!);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="ap-aging.pdf"`);
+  res.send(pdf);
+});

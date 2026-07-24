@@ -103,11 +103,11 @@ export async function getDashboardSummary(businessId: string) {
     revenue: Number(t._sum.total ?? 0),
   }));
 
+  // Includes out-of-stock (qty === 0) products too — the dashboard's stock alert list
+  // should name every alerted product, not just the low-but-nonzero ones, so the alert
+  // count and the visible list always match.
   const lowStockItems = lowStockProducts
-    .filter((p) => {
-      const qty = totalQty(p.stocks);
-      return qty > 0 && qty <= p.lowStockThreshold;
-    })
+    .filter((p) => totalQty(p.stocks) <= p.lowStockThreshold)
     .map((p) => ({
       id: p.id,
       name: p.name,

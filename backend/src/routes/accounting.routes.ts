@@ -19,6 +19,9 @@ router.get(
   requirePermission("accounting.view"),
   accountingController.downloadIncomeStatementPdf,
 );
+router.get("/vat-return/pdf", requirePermission("accounting.view"), accountingController.downloadVatReturnPdf);
+router.get("/ar-aging/pdf", requirePermission("accounting.view"), accountingController.downloadArAgingPdf);
+router.get("/ap-aging/pdf", requirePermission("accounting.view"), accountingController.downloadApAgingPdf);
 
 router.get("/journal-entries", requirePermission("accounting.view"), accountingController.listJournalEntries);
 router.post(

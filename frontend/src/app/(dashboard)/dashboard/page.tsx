@@ -1,6 +1,7 @@
 "use client";
 
 import { memo } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   DollarSign,
@@ -188,10 +189,15 @@ export default function DashboardPage() {
         </div>
         <div className="flex items-center gap-2">
           {(data.lowStockCount > 0 || data.outOfStockCount > 0) && (
-            <Badge variant="destructive" className="gap-1">
-              <AlertTriangle className="h-3 w-3" />
-              {data.lowStockCount + data.outOfStockCount} stock alerts
-            </Badge>
+            <Link href="/inventory">
+              <Badge
+                variant="destructive"
+                className="gap-1 cursor-pointer transition-opacity hover:opacity-80"
+              >
+                <AlertTriangle className="h-3 w-3" />
+                {data.lowStockCount + data.outOfStockCount} stock alerts
+              </Badge>
+            </Link>
           )}
           <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5">
             <RefreshCw className="h-3.5 w-3.5" />

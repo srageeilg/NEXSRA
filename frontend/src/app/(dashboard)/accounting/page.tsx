@@ -24,6 +24,9 @@ const REPORT_OPTIONS: { value: AccountingReportKind; label: string }[] = [
   { value: "trial-balance", label: "Trial Balance" },
   { value: "balance-sheet", label: "Balance Sheet" },
   { value: "income-statement", label: "Income Statement (P&L)" },
+  { value: "vat-return", label: "VAT Return" },
+  { value: "ar-aging", label: "Accounts Receivable Aging" },
+  { value: "ap-aging", label: "Accounts Payable Aging" },
 ];
 
 export default function AccountingPage() {

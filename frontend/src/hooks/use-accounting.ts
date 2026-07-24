@@ -62,13 +62,23 @@ export function useJournalEntries(params: { page?: number; pageSize?: number }) 
   });
 }
 
-export type AccountingReportKind = "ledger" | "trial-balance" | "balance-sheet" | "income-statement";
+export type AccountingReportKind =
+  | "ledger"
+  | "trial-balance"
+  | "balance-sheet"
+  | "income-statement"
+  | "vat-return"
+  | "ar-aging"
+  | "ap-aging";
 
 const REPORT_ENDPOINTS: Record<AccountingReportKind, { path: string; filename: string }> = {
   ledger: { path: "/accounting/ledger/pdf", filename: "general-ledger.pdf" },
   "trial-balance": { path: "/accounting/trial-balance/pdf", filename: "trial-balance.pdf" },
   "balance-sheet": { path: "/accounting/balance-sheet/pdf", filename: "balance-sheet.pdf" },
   "income-statement": { path: "/accounting/income-statement/pdf", filename: "income-statement.pdf" },
+  "vat-return": { path: "/accounting/vat-return/pdf", filename: "vat-return.pdf" },
+  "ar-aging": { path: "/accounting/ar-aging/pdf", filename: "ar-aging.pdf" },
+  "ap-aging": { path: "/accounting/ap-aging/pdf", filename: "ap-aging.pdf" },
 };
 
 /** Downloads an accounting report PDF through the authenticated API client (a plain <a href> can't carry the bearer token). */

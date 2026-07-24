@@ -46,15 +46,6 @@ export function StockAlerts({ items, outOfStockCount }: StockAlertsProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 max-h-80 overflow-y-auto">
-        {outOfStockCount > 0 && items.length === 0 && (
-          <div className="flex items-center gap-3 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5">
-            <PackageX className="h-4 w-4 shrink-0 text-destructive" />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-destructive">{outOfStockCount} products out of stock</p>
-              <p className="text-xs text-muted-foreground">Check inventory for details</p>
-            </div>
-          </div>
-        )}
         {items.map((item) => {
           const pct = Math.round((item.currentQty / item.threshold) * 100);
           const isOut = item.currentQty === 0;

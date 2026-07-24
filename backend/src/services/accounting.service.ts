@@ -1,4 +1,5 @@
 import PDFDocument from "pdfkit";
+import dayjs from "dayjs";
 import { AccountType, JournalEntryType } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { ApiError } from "../utils/ApiError";
@@ -145,10 +146,10 @@ export async function generateTrialBalancePdf(businessId: string): Promise<Buffe
   const currency = business.currency;
 
   const columns: ReportColumn[] = [
-    { label: "Code", width: 60 },
-    { label: "Account", width: 260 },
-    { label: "Debit", width: 100, align: "right" },
-    { label: "Credit", width: 100, align: "right" },
+    { label: "Code", width: 50 },
+    { label: "Account", width: 240 },
+    { label: "Debit", width: 90, align: "right" },
+    { label: "Credit", width: 90, align: "right" },
   ];
 
   let totalDebit = 0;
@@ -183,9 +184,9 @@ export async function generateBalanceSheetPdf(businessId: string): Promise<Buffe
   const currency = business.currency;
 
   const columns: ReportColumn[] = [
-    { label: "Code", width: 70 },
-    { label: "Account", width: 320 },
-    { label: "Amount", width: 130, align: "right" },
+    { label: "Code", width: 50 },
+    { label: "Account", width: 300 },
+    { label: "Amount", width: 110, align: "right" },
   ];
 
   const byType = (type: AccountType) => accounts.filter((a) => a.type === type);
@@ -242,9 +243,9 @@ export async function generateIncomeStatementPdf(businessId: string): Promise<Bu
   const currency = business.currency;
 
   const columns: ReportColumn[] = [
-    { label: "Code", width: 70 },
-    { label: "Account", width: 320 },
-    { label: "Amount", width: 130, align: "right" },
+    { label: "Code", width: 50 },
+    { label: "Account", width: 300 },
+    { label: "Amount", width: 110, align: "right" },
   ];
 
   const byType = (type: AccountType) => accounts.filter((a) => a.type === type);
@@ -274,6 +275,205 @@ export async function generateIncomeStatementPdf(businessId: string): Promise<Bu
       heading: "Result",
       columns,
       rows: [{ cells: ["", netIncome >= 0 ? "Net Profit" : "Net Loss", formatCurrency(netIncome, currency)], bold: true }],
+    },
+  ]);
+}
+
+const ACTIVE_INVOICE_STATUSES = ["SENT", "PARTIALLY_PAID", "PAID", "OVERDUE"] as const;
+const OUTSTANDING_INVOICE_STATUSES = ["SENT", "PARTIALLY_PAID", "OVERDUE"] as const;
+const OUTSTANDING_PO_STATUSES = ["ORDERED", "PARTIALLY_RECEIVED"] as const;
+
+/** Standard monthly VAT return: Output VAT from sales vs Input VAT from purchases,
+ * net payable (or refundable/carried forward) — the numbers a VAT-registered
+ * Nepali business reports to IRD each month. */
+export async function generateVatReturnPdf(businessId: string, from?: Date, to?: Date): Promise<Buffer> {
+  const business = await prisma.business.findUniqueOrThrow({ where: { id: businessId } });
+  const currency = business.currency;
+  const start = from ?? dayjs().startOf("month").toDate();
+  const end = to ?? dayjs().endOf("month").toDate();
+
+  const [invoices, purchases] = await Promise.all([
+    prisma.invoice.findMany({
+      where: { businessId, status: { in: [...ACTIVE_INVOICE_STATUSES] }, issueDate: { gte: start, lte: end } },
+      select: { subTotal: true, discountTotal: true, taxTotal: true },
+    }),
+    prisma.purchaseOrder.findMany({
+      where: { businessId, orderDate: { gte: start, lte: end } },
+      select: { subTotal: true, discountTotal: true, taxTotal: true },
+    }),
+  ]);
+
+  const taxableSales = invoices.reduce((s, i) => s + Number(i.subTotal) - Number(i.discountTotal), 0);
+  const outputVat = invoices.reduce((s, i) => s + Number(i.taxTotal), 0);
+  const taxablePurchases = purchases.reduce((s, p) => s + Number(p.subTotal) - Number(p.discountTotal), 0);
+  const inputVat = purchases.reduce((s, p) => s + Number(p.taxTotal), 0);
+  const netVat = outputVat - inputVat;
+
+  const columns: ReportColumn[] = [
+    { label: "Particulars", width: 320 },
+    { label: "Amount", width: 140, align: "right" },
+  ];
+
+  return renderTabularReportPdf(business.name, "VAT Return", [
+    {
+      heading: `Period: ${dayjs(start).format("MMM D, YYYY")} – ${dayjs(end).format("MMM D, YYYY")}`,
+      columns,
+      rows: [
+        { cells: ["Taxable Sales (net of discount)", formatCurrency(taxableSales, currency)] },
+        { cells: ["Output VAT (VAT collected on sales)", formatCurrency(outputVat, currency)], bold: true },
+        { cells: ["Taxable Purchases (net of discount)", formatCurrency(taxablePurchases, currency)] },
+        { cells: ["Input VAT (VAT paid on purchases)", formatCurrency(inputVat, currency)], bold: true },
+        {
+          cells: [
+            netVat >= 0 ? "Net VAT Payable" : "Net VAT Refundable / Carried Forward",
+            formatCurrency(Math.abs(netVat), currency),
+          ],
+          bold: true,
+        },
+      ],
+    },
+  ]);
+}
+
+function agingBucket(days: number): string {
+  if (days <= 30) return "0-30 days";
+  if (days <= 60) return "31-60 days";
+  if (days <= 90) return "61-90 days";
+  return "90+ days";
+}
+
+const AGING_BUCKETS = ["0-30 days", "31-60 days", "61-90 days", "90+ days"] as const;
+
+/** Accounts Receivable aging — every unpaid/partially-paid invoice, bucketed by how
+ * long it's been outstanding, so you know who to chase for collections. */
+export async function generateArAgingPdf(businessId: string): Promise<Buffer> {
+  const business = await prisma.business.findUniqueOrThrow({ where: { id: businessId } });
+  const currency = business.currency;
+
+  const invoices = await prisma.invoice.findMany({
+    where: { businessId, status: { in: [...OUTSTANDING_INVOICE_STATUSES] } },
+    select: { invoiceNumber: true, issueDate: true, grandTotal: true, amountPaid: true, customer: { select: { name: true } } },
+    orderBy: { issueDate: "asc" },
+  });
+
+  const now = dayjs();
+  const rows = invoices
+    .map((inv) => {
+      const outstanding = Number(inv.grandTotal) - Number(inv.amountPaid);
+      const days = now.diff(dayjs(inv.issueDate), "day");
+      return {
+        invoiceNumber: inv.invoiceNumber,
+        customer: inv.customer?.name ?? "Walk-in",
+        days,
+        outstanding,
+        bucket: agingBucket(days),
+      };
+    })
+    .filter((r) => r.outstanding > 0.01);
+
+  const totals: Record<string, number> = { "0-30 days": 0, "31-60 days": 0, "61-90 days": 0, "90+ days": 0 };
+  rows.forEach((r) => {
+    totals[r.bucket] += r.outstanding;
+  });
+  const grandTotal = rows.reduce((s, r) => s + r.outstanding, 0);
+
+  const summaryColumns: ReportColumn[] = [
+    { label: "Age", width: 300 },
+    { label: "Outstanding", width: 160, align: "right" },
+  ];
+  const detailColumns: ReportColumn[] = [
+    { label: "Invoice", width: 70 },
+    { label: "Customer", width: 150 },
+    { label: "Days", width: 45, align: "right" },
+    { label: "Age", width: 90 },
+    { label: "Outstanding", width: 105, align: "right" },
+  ];
+
+  return renderTabularReportPdf(business.name, "Accounts Receivable Aging", [
+    {
+      heading: "Summary",
+      columns: summaryColumns,
+      rows: [
+        ...AGING_BUCKETS.map((b) => ({ cells: [b, formatCurrency(totals[b], currency)] })),
+        { cells: ["Total Outstanding", formatCurrency(grandTotal, currency)], bold: true },
+      ],
+    },
+    {
+      heading: "Outstanding Invoices",
+      columns: detailColumns,
+      rows:
+        rows.length > 0
+          ? rows.map((r) => ({
+              cells: [r.invoiceNumber, r.customer, String(r.days), r.bucket, formatCurrency(r.outstanding, currency)],
+            }))
+          : [{ cells: ["—", "No outstanding invoices", "", "", ""] }],
+    },
+  ]);
+}
+
+/** Accounts Payable aging — every unpaid/partially-paid purchase order, bucketed by
+ * how long it's been outstanding, so you know what's coming due to suppliers. */
+export async function generateApAgingPdf(businessId: string): Promise<Buffer> {
+  const business = await prisma.business.findUniqueOrThrow({ where: { id: businessId } });
+  const currency = business.currency;
+
+  const orders = await prisma.purchaseOrder.findMany({
+    where: { businessId, status: { in: [...OUTSTANDING_PO_STATUSES] } },
+    select: { poNumber: true, orderDate: true, grandTotal: true, amountPaid: true, supplier: { select: { name: true } } },
+    orderBy: { orderDate: "asc" },
+  });
+
+  const now = dayjs();
+  const rows = orders
+    .map((po) => {
+      const outstanding = Number(po.grandTotal) - Number(po.amountPaid);
+      const days = now.diff(dayjs(po.orderDate), "day");
+      return {
+        poNumber: po.poNumber,
+        supplier: po.supplier.name,
+        days,
+        outstanding,
+        bucket: agingBucket(days),
+      };
+    })
+    .filter((r) => r.outstanding > 0.01);
+
+  const totals: Record<string, number> = { "0-30 days": 0, "31-60 days": 0, "61-90 days": 0, "90+ days": 0 };
+  rows.forEach((r) => {
+    totals[r.bucket] += r.outstanding;
+  });
+  const grandTotal = rows.reduce((s, r) => s + r.outstanding, 0);
+
+  const summaryColumns: ReportColumn[] = [
+    { label: "Age", width: 300 },
+    { label: "Outstanding", width: 160, align: "right" },
+  ];
+  const detailColumns: ReportColumn[] = [
+    { label: "PO #", width: 70 },
+    { label: "Supplier", width: 150 },
+    { label: "Days", width: 45, align: "right" },
+    { label: "Age", width: 90 },
+    { label: "Outstanding", width: 105, align: "right" },
+  ];
+
+  return renderTabularReportPdf(business.name, "Accounts Payable Aging", [
+    {
+      heading: "Summary",
+      columns: summaryColumns,
+      rows: [
+        ...AGING_BUCKETS.map((b) => ({ cells: [b, formatCurrency(totals[b], currency)] })),
+        { cells: ["Total Outstanding", formatCurrency(grandTotal, currency)], bold: true },
+      ],
+    },
+    {
+      heading: "Outstanding Purchase Orders",
+      columns: detailColumns,
+      rows:
+        rows.length > 0
+          ? rows.map((r) => ({
+              cells: [r.poNumber, r.supplier, String(r.days), r.bucket, formatCurrency(r.outstanding, currency)],
+            }))
+          : [{ cells: ["—", "No outstanding purchase orders", "", "", ""] }],
     },
   ]);
 }
