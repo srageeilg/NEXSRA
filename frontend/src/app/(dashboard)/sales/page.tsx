@@ -60,6 +60,14 @@ export default function PosPage() {
     );
   };
 
+  const setQuantity = (productId: string, quantity: number) => {
+    setCart((prev) =>
+      prev
+        .map((line) => (line.productId === productId ? { ...line, quantity } : line))
+        .filter((line) => line.quantity > 0),
+    );
+  };
+
   const removeLine = (productId: string) => setCart((prev) => prev.filter((l) => l.productId !== productId));
 
   const subTotal = useMemo(() => cart.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0), [cart]);
@@ -174,7 +182,16 @@ export default function PosPage() {
                   <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(line.productId, -1)}>
                     <Minus className="h-3 w-3" />
                   </Button>
-                  <span className="w-6 text-center text-sm">{line.quantity}</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={line.quantity}
+                    onChange={(e) => {
+                      const next = Number(e.target.value);
+                      if (Number.isFinite(next)) setQuantity(line.productId, Math.max(0, Math.floor(next)));
+                    }}
+                    className="h-6 w-12 px-1 text-center text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
                   <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(line.productId, 1)}>
                     <Plus className="h-3 w-3" />
                   </Button>
