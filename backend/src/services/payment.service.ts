@@ -1,6 +1,7 @@
 import { Prisma, PaymentDirection, PaymentMethod } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { ApiError } from "../utils/ApiError";
+import { ensureDefaultAccounts, postAutoJournalEntry, LEDGER_ACCOUNT_CODES } from "./ledger.service";
 
 interface RecordPaymentInput {
   direction: PaymentDirection;
@@ -15,7 +16,8 @@ interface RecordPaymentInput {
 }
 
 export async function recordPayment(businessId: string, input: RecordPaymentInput) {
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(
+    async (tx) => {
     const payment = await tx.payment.create({
       data: { businessId, ...input },
     });
@@ -83,8 +85,34 @@ export async function recordPayment(businessId: string, input: RecordPaymentInpu
       });
     }
 
+    // Auto-post to the general ledger — this is the piece that was missing: collecting on
+    // an invoice later, or paying a supplier later, must move Cash against Accounts
+    // Receivable/Payable just like the initial POS sale or goods receipt does.
+    await ensureDefaultAccounts(tx, businessId);
+    if (input.direction === "INBOUND" && input.customerId) {
+      await postAutoJournalEntry(tx, businessId, {
+        description: `Payment received (${input.method})`,
+        reference: input.reference,
+        lines: [
+          { code: LEDGER_ACCOUNT_CODES.CASH, type: "DEBIT", amount: input.amount },
+          { code: LEDGER_ACCOUNT_CODES.ACCOUNTS_RECEIVABLE, type: "CREDIT", amount: input.amount },
+        ],
+      });
+    } else if (input.direction === "OUTBOUND" && input.supplierId) {
+      await postAutoJournalEntry(tx, businessId, {
+        description: `Payment made (${input.method})`,
+        reference: input.reference,
+        lines: [
+          { code: LEDGER_ACCOUNT_CODES.ACCOUNTS_PAYABLE, type: "DEBIT", amount: input.amount },
+          { code: LEDGER_ACCOUNT_CODES.CASH, type: "CREDIT", amount: input.amount },
+        ],
+      });
+    }
+
     return payment;
-  });
+    },
+    { timeout: 15000 },
+  );
 }
 
 export async function listPayments(
