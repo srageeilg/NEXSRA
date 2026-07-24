@@ -8,13 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useBusinessProfile, useUpdateBusinessProfile, type BusinessProfile } from "@/hooks/use-settings";
 import { WORLD_CURRENCIES } from "@/lib/currencies";
 import { cn } from "@/lib/utils";
 
 type FormValues = Pick<
   BusinessProfile,
-  "name" | "phone" | "address" | "website" | "currency" | "timezone" | "invoicePrefix" | "panNumber" | "vatNumber"
+  "name" | "phone" | "address" | "website" | "currency" | "timezone" | "invoicePrefix"
 >;
 
 export function BusinessProfileForm() {
@@ -24,6 +25,8 @@ export function BusinessProfileForm() {
   const [currencySearch, setCurrencySearch] = useState("");
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const selectedCurrency = watch("currency");
+  const [taxIdType, setTaxIdType] = useState<"PAN" | "VAT">("PAN");
+  const [taxIdNumber, setTaxIdNumber] = useState("");
 
   useEffect(() => {
     if (profile) {
@@ -35,9 +38,14 @@ export function BusinessProfileForm() {
         currency: profile.currency,
         timezone: profile.timezone,
         invoicePrefix: profile.invoicePrefix,
-        panNumber: profile.panNumber ?? "",
-        vatNumber: profile.vatNumber ?? "",
       });
+      if (profile.vatNumber && !profile.panNumber) {
+        setTaxIdType("VAT");
+        setTaxIdNumber(profile.vatNumber);
+      } else {
+        setTaxIdType("PAN");
+        setTaxIdNumber(profile.panNumber ?? "");
+      }
     }
   }, [profile, reset]);
 
@@ -59,7 +67,16 @@ export function BusinessProfileForm() {
         <CardTitle className="text-base">Business profile</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit((values) => updateProfile.mutate(values))} className="space-y-4">
+        <form
+          onSubmit={handleSubmit((values) =>
+            updateProfile.mutate({
+              ...values,
+              panNumber: taxIdType === "PAN" ? taxIdNumber : "",
+              vatNumber: taxIdType === "VAT" ? taxIdNumber : "",
+            }),
+          )}
+          className="space-y-4"
+        >
           <div className="space-y-2">
             <Label htmlFor="name">Business name</Label>
             <Input id="name" {...register("name")} />
@@ -164,16 +181,29 @@ export function BusinessProfileForm() {
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="panNumber">PAN number</Label>
-              <Input id="panNumber" placeholder="e.g. 123456789" {...register("panNumber")} />
+              <Label>Tax ID type</Label>
+              <Select value={taxIdType} onValueChange={(v) => setTaxIdType(v as "PAN" | "VAT")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PAN">PAN</SelectItem>
+                  <SelectItem value="VAT">VAT</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="vatNumber">VAT number</Label>
-              <Input id="vatNumber" placeholder="e.g. 987654321" {...register("vatNumber")} />
+              <Label htmlFor="taxIdNumber">{taxIdType} number</Label>
+              <Input
+                id="taxIdNumber"
+                placeholder={taxIdType === "PAN" ? "e.g. 123456789" : "e.g. 987654321"}
+                value={taxIdNumber}
+                onChange={(e) => setTaxIdNumber(e.target.value)}
+              />
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Save whichever you have — both are printed on tax invoices you generate from NEXSRA.
+            Choose whichever your business is registered under — it's printed on tax invoices you generate from NEXSRA.
           </p>
 
           <Button type="submit" disabled={updateProfile.isPending}>
