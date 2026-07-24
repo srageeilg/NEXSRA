@@ -268,7 +268,7 @@ export function AiAssistant() {
               </Button>
             </div>
             <p className="mt-1.5 text-center text-[10px] text-muted-foreground">
-              Powered by Claude AI · Data updates in real time
+              Data updates in real time
             </p>
           </form>
         </div>

@@ -50,6 +50,7 @@ export const env = {
   },
 
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  groqApiKey: process.env.GROQ_API_KEY ?? "",
 
   rateLimit: {
     windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS ?? 900000),

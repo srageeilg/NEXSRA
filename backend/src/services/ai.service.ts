@@ -1,9 +1,9 @@
-import Anthropic from "@anthropic-ai/sdk";
+import Groq from "groq-sdk";
 import { prisma } from "../config/prisma";
 import { env } from "../config/env";
 import dayjs from "dayjs";
 
-const client = env.anthropicApiKey ? new Anthropic({ apiKey: env.anthropicApiKey }) : null;
+const client = env.groqApiKey ? new Groq({ apiKey: env.groqApiKey }) : null;
 
 const ACTIVE = ["SENT", "PARTIALLY_PAID", "PAID", "OVERDUE"] as const;
 
@@ -174,7 +174,7 @@ export async function streamChatResponse(
   onError: (msg: string) => void,
 ) {
   if (!client) {
-    onError("AI assistant is not configured. Add ANTHROPIC_API_KEY to enable it.");
+    onError("AI assistant is not configured. Add GROQ_API_KEY to enable it.");
     return;
   }
 
@@ -182,19 +182,21 @@ export async function streamChatResponse(
     const context = await getBusinessContext(businessId);
     const systemPrompt = buildSystemPrompt(context);
 
-    const stream = await client.messages.stream({
-      model: "claude-opus-4-8",
+    const stream = await client.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
       max_tokens: 1024,
-      thinking: { type: "adaptive" },
-      system: systemPrompt,
+      stream: true,
       messages: [
+        { role: "system", content: systemPrompt },
         ...history.map((h) => ({ role: h.role as "user" | "assistant", content: h.content })),
         { role: "user", content: message },
       ],
     });
 
-    stream.on("text", onText);
-    await stream.finalMessage();
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content;
+      if (delta) onText(delta);
+    }
     onDone();
   } catch (err) {
     onError(err instanceof Error ? err.message : "An error occurred");
