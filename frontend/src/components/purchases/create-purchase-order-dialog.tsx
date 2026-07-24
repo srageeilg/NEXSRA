@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useFieldArray, useForm, Controller } from "react-hook-form";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,10 +33,17 @@ export function CreatePurchaseOrderDialog() {
   const { data: productsData } = useProducts({ pageSize: 100 });
   const createPO = useCreatePurchaseOrder();
 
-  const { register, handleSubmit, control, reset } = useForm<FormValues>({
+  const { register, handleSubmit, control, reset, setValue } = useForm<FormValues>({
     defaultValues: { items: [{ productId: "", quantityOrdered: 1, unitCost: 0 }] },
   });
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
+
+  // Default to the business's primary warehouse so this doesn't need picking every time.
+  useEffect(() => {
+    if (open && warehouses && warehouses.length > 0) {
+      setValue("warehouseId", warehouses[0].id);
+    }
+  }, [open, warehouses, setValue]);
 
   const onSubmit = (values: FormValues) => {
     createPO.mutate(values, {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search, Plus, Minus, Trash2, ShoppingCart } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,13 @@ export default function PosPage() {
   const { data: warehouses } = useWarehouses();
   const { data: customersData } = useCustomers({ pageSize: 100 });
   const checkout = usePosCheckout();
+
+  // Default to the business's primary warehouse so cashiers don't have to pick it every sale.
+  useEffect(() => {
+    if (!warehouseId && warehouses && warehouses.length > 0) {
+      setWarehouseId(warehouses[0].id);
+    }
+  }, [warehouseId, warehouses]);
 
   const addToCart = (product: Product) => {
     setCart((prev) => {

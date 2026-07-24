@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,11 +66,23 @@ export function StockActionDialog({ mode }: { mode: Mode }) {
     handleSubmit,
     control,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<FormValues>();
 
   const isTransfer = mode === "transfer";
   const isAdjustment = mode === "adjustment";
+
+  // Default to the business's primary warehouse so this doesn't need picking every time.
+  useEffect(() => {
+    if (open && warehouses && warehouses.length > 0) {
+      if (isTransfer) {
+        setValue("fromWarehouseId", warehouses[0].id);
+      } else {
+        setValue("warehouseId", warehouses[0].id);
+      }
+    }
+  }, [open, warehouses, isTransfer, setValue]);
 
   const onSubmit = (values: FormValues) => {
     const onSuccess = () => {
