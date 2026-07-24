@@ -30,7 +30,14 @@ function generatePassword() {
 export function ResetPasswordDialog({ user }: { user: AdminUser }) {
   const [open, setOpen] = useState(false);
   const resetPassword = useResetUserPassword();
-  const { register, handleSubmit, reset, setValue, watch } = useForm<FormValues>();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<FormValues>();
 
   const onSubmit = (values: FormValues) => {
     resetPassword.mutate(
@@ -69,6 +76,7 @@ export function ResetPasswordDialog({ user }: { user: AdminUser }) {
             <div className="flex gap-2">
               <Input
                 id="newPassword"
+                type="text"
                 placeholder="At least 8 characters"
                 {...register("newPassword", { required: true, minLength: 8 })}
               />
@@ -76,7 +84,10 @@ export function ResetPasswordDialog({ user }: { user: AdminUser }) {
                 <Dices className="h-4 w-4" />
               </Button>
             </div>
-            {watch("newPassword") && (
+            {errors.newPassword && (
+              <p className="text-xs text-destructive">Password is required and must be at least 8 characters.</p>
+            )}
+            {!errors.newPassword && watch("newPassword") && (
               <p className="text-xs text-muted-foreground">
                 This immediately signs the user out everywhere. Share this password with them directly.
               </p>
