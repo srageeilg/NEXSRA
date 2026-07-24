@@ -248,6 +248,7 @@ model Business {
   approvedAt   DateTime?
   approvedById String?
   panNumber    String?
+  vatNumber    String?
 
   planName      String    @default("TRIAL")
   planExpiresAt DateTime?

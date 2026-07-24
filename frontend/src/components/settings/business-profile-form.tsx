@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 
 type FormValues = Pick<
   BusinessProfile,
-  "name" | "phone" | "address" | "website" | "currency" | "timezone" | "invoicePrefix" | "panNumber"
+  "name" | "phone" | "address" | "website" | "currency" | "timezone" | "invoicePrefix" | "panNumber" | "vatNumber"
 >;
 
 export function BusinessProfileForm() {
@@ -36,6 +36,7 @@ export function BusinessProfileForm() {
         timezone: profile.timezone,
         invoicePrefix: profile.invoicePrefix,
         panNumber: profile.panNumber ?? "",
+        vatNumber: profile.vatNumber ?? "",
       });
     }
   }, [profile, reset]);
@@ -161,11 +162,19 @@ export function BusinessProfileForm() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="panNumber">PAN number</Label>
-            <Input id="panNumber" placeholder="e.g. 123456789" {...register("panNumber")} />
-            <p className="text-xs text-muted-foreground">Printed on tax invoices you generate from NEXSRA.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="panNumber">PAN number</Label>
+              <Input id="panNumber" placeholder="e.g. 123456789" {...register("panNumber")} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="vatNumber">VAT number</Label>
+              <Input id="vatNumber" placeholder="e.g. 987654321" {...register("vatNumber")} />
+            </div>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Save whichever you have — both are printed on tax invoices you generate from NEXSRA.
+          </p>
 
           <Button type="submit" disabled={updateProfile.isPending}>
             {updateProfile.isPending ? "Saving..." : "Save changes"}

@@ -92,6 +92,7 @@ export async function generateInvoicePdf(businessId: string, id: string): Promis
       invoice.business.phone ? `Tel/Mob: ${invoice.business.phone}` : null,
       `Email: ${invoice.business.email}`,
       invoice.business.panNumber ? `PAN: ${invoice.business.panNumber}` : null,
+      invoice.business.vatNumber ? `VAT: ${invoice.business.vatNumber}` : null,
     ]
       .filter(Boolean)
       .join("    ");

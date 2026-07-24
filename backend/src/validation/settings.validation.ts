@@ -13,6 +13,7 @@ export const updateBusinessProfileSchema = z.object({
     invoicePrefix: z.string().max(10).optional(),
     invoiceTemplate: z.string().max(30).optional(),
     panNumber: z.string().max(30).optional(),
+    vatNumber: z.string().max(30).optional(),
   }),
 });
 

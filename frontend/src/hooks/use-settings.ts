@@ -15,6 +15,7 @@ export interface BusinessProfile {
   timezone: string;
   invoicePrefix: string;
   panNumber: string | null;
+  vatNumber: string | null;
   status: string;
 }
 
