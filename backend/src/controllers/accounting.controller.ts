@@ -25,3 +25,10 @@ export const createJournalEntry = asyncHandler(async (req: Request, res: Respons
   const entry = await accountingService.createJournalEntry(req.user!.businessId!, req.body);
   res.status(201).json({ success: true, data: entry });
 });
+
+export const downloadGeneralLedgerPdf = asyncHandler(async (req: Request, res: Response) => {
+  const pdf = await accountingService.generateGeneralLedgerPdf(req.user!.businessId!);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="general-ledger.pdf"`);
+  res.send(pdf);
+});

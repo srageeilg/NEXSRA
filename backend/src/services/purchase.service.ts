@@ -3,6 +3,7 @@ import { prisma } from "../config/prisma";
 import { ApiError } from "../utils/ApiError";
 import { applyStockDelta } from "./inventory.service";
 import { nextSequenceNumber } from "../utils/orderNumber";
+import { ensureDefaultAccounts, postAutoJournalEntry, LEDGER_ACCOUNT_CODES } from "./ledger.service";
 
 interface PurchaseItemInput {
   productId: string;
@@ -132,6 +133,8 @@ export async function receiveGoods(businessId: string, poId: string, input: Rece
       throw ApiError.badRequest(`Cannot receive goods for a purchase order with status ${po.status}`);
     }
 
+    let receivedCost = 0;
+
     for (const receipt of input.items) {
       const item = po.items.find((i) => i.id === receipt.itemId);
       if (!item) throw ApiError.badRequest(`Item ${receipt.itemId} does not belong to this purchase order`);
@@ -164,6 +167,22 @@ export async function receiveGoods(businessId: string, poId: string, input: Rece
       await tx.purchaseOrderItem.update({
         where: { id: item.id },
         data: { quantityReceived: item.quantityReceived + receipt.quantityReceived },
+      });
+
+      receivedCost += receipt.quantityReceived * Number(item.unitCost);
+    }
+
+    // Auto-post to the general ledger: receiving goods increases Inventory and the
+    // amount owed to the supplier (Accounts Payable).
+    if (receivedCost > 0) {
+      await ensureDefaultAccounts(tx, businessId);
+      await postAutoJournalEntry(tx, businessId, {
+        description: `Goods received — ${po.poNumber}`,
+        reference: po.poNumber,
+        lines: [
+          { code: LEDGER_ACCOUNT_CODES.INVENTORY, type: "DEBIT", amount: receivedCost },
+          { code: LEDGER_ACCOUNT_CODES.ACCOUNTS_PAYABLE, type: "CREDIT", amount: receivedCost },
+        ],
       });
     }
 

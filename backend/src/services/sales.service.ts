@@ -3,6 +3,7 @@ import { prisma } from "../config/prisma";
 import { ApiError } from "../utils/ApiError";
 import { applyStockDelta } from "./inventory.service";
 import { nextSequenceNumber } from "../utils/orderNumber";
+import { ensureDefaultAccounts, postAutoJournalEntry, LEDGER_ACCOUNT_CODES } from "./ledger.service";
 
 interface OrderItemInput {
   productId: string;
@@ -209,6 +210,37 @@ export async function posCheckout(businessId: string, input: PosCheckoutInput, c
         },
       });
     }
+
+    // Auto-post to the general ledger: Cash/AR against Revenue+VAT, and COGS against Inventory.
+    await ensureDefaultAccounts(tx, businessId);
+
+    const revenueAmount = totals.subTotal - totals.discountTotal;
+    await postAutoJournalEntry(tx, businessId, {
+      description: `POS Sale ${orderNumber}`,
+      reference: invoiceNumber,
+      lines: [
+        { code: LEDGER_ACCOUNT_CODES.CASH, type: "DEBIT", amount: amountPaid },
+        { code: LEDGER_ACCOUNT_CODES.ACCOUNTS_RECEIVABLE, type: "DEBIT", amount: outstandingAmount },
+        { code: LEDGER_ACCOUNT_CODES.SALES_REVENUE, type: "CREDIT", amount: revenueAmount },
+        { code: LEDGER_ACCOUNT_CODES.VAT_PAYABLE, type: "CREDIT", amount: totals.taxTotal },
+      ],
+    });
+
+    const products = await tx.product.findMany({
+      where: { id: { in: order.items.map((i) => i.productId) } },
+      select: { id: true, purchasePrice: true },
+    });
+    const costByProduct = new Map(products.map((p) => [p.id, Number(p.purchasePrice)]));
+    const cogsAmount = order.items.reduce((sum, i) => sum + i.quantity * (costByProduct.get(i.productId) ?? 0), 0);
+
+    await postAutoJournalEntry(tx, businessId, {
+      description: `Cost of goods sold — ${orderNumber}`,
+      reference: invoiceNumber,
+      lines: [
+        { code: LEDGER_ACCOUNT_CODES.COGS, type: "DEBIT", amount: cogsAmount },
+        { code: LEDGER_ACCOUNT_CODES.INVENTORY, type: "CREDIT", amount: cogsAmount },
+      ],
+    });
 
     return { order, invoice };
     },

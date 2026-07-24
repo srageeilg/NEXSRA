@@ -62,6 +62,17 @@ export function useJournalEntries(params: { page?: number; pageSize?: number }) 
   });
 }
 
+/** Downloads the General Ledger PDF through the authenticated API client (a plain <a href> can't carry the bearer token). */
+export async function downloadGeneralLedgerPdf() {
+  const response = await apiClient.get("/accounting/ledger/pdf", { responseType: "blob" });
+  const url = URL.createObjectURL(response.data as Blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "general-ledger.pdf";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export function useCreateJournalEntry() {
   const queryClient = useQueryClient();
   return useMutation({

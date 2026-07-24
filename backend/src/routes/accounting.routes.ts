@@ -11,6 +11,8 @@ router.use(authenticate, requireBusiness);
 router.get("/accounts", requirePermission("accounting.view"), accountingController.listAccounts);
 router.post("/accounts", requirePermission("accounting.create"), validate(createAccountSchema), accountingController.createAccount);
 
+router.get("/ledger/pdf", requirePermission("accounting.view"), accountingController.downloadGeneralLedgerPdf);
+
 router.get("/journal-entries", requirePermission("accounting.view"), accountingController.listJournalEntries);
 router.post(
   "/journal-entries",

@@ -1,13 +1,15 @@
 "use client";
 
+import { Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreateAccountDialog } from "@/components/accounting/create-account-dialog";
 import { CreateJournalEntryDialog } from "@/components/accounting/create-journal-entry-dialog";
-import { useAccounts, useJournalEntries } from "@/hooks/use-accounting";
+import { useAccounts, useJournalEntries, downloadGeneralLedgerPdf } from "@/hooks/use-accounting";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 export default function AccountingPage() {
@@ -16,9 +18,17 @@ export default function AccountingPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Accounting</h1>
-        <p className="text-sm text-muted-foreground">Chart of accounts and double-entry journal.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Accounting</h1>
+          <p className="text-sm text-muted-foreground">
+            Chart of accounts and journal — sales, purchases, and expenses post here automatically.
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => downloadGeneralLedgerPdf()}>
+          <Download className="mr-1.5 h-4 w-4" />
+          Download General Ledger
+        </Button>
       </div>
 
       <Tabs defaultValue="accounts">
