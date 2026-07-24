@@ -60,6 +60,224 @@ export async function createJournalEntry(
   });
 }
 
+type Align = "left" | "right";
+interface ReportColumn {
+  label: string;
+  width: number;
+  align?: Align;
+}
+interface ReportRow {
+  cells: string[];
+  bold?: boolean;
+}
+
+/** Shared renderer for the simple grouped-table reports (Trial Balance, Balance Sheet,
+ * Income Statement) — a title block followed by one or more titled tables. */
+function renderTabularReportPdf(
+  businessName: string,
+  reportTitle: string,
+  sections: { heading: string; columns: ReportColumn[]; rows: ReportRow[] }[],
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: "A4", margin: 40 });
+    const chunks: Buffer[] = [];
+    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const left = doc.page.margins.left;
+
+    doc.font("Helvetica-Bold").fontSize(18).text(businessName, left, doc.y, { width: pageWidth, align: "center" });
+    doc.font("Helvetica-Bold").fontSize(13).text(reportTitle, { width: pageWidth, align: "center" });
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor("#666")
+      .text(`As of ${new Date().toISOString().slice(0, 10)}`, { width: pageWidth, align: "center" });
+    doc.fillColor("#000");
+    doc.moveDown(1.2);
+
+    for (const section of sections) {
+      if (doc.y + 60 > doc.page.height - doc.page.margins.bottom) doc.addPage();
+
+      doc.font("Helvetica-Bold").fontSize(12).text(section.heading, left, doc.y, { width: pageWidth });
+      doc.moveDown(0.3);
+
+      const rowHeight = 18;
+      let x = left;
+      const headerY = doc.y;
+      doc.font("Helvetica-Bold").fontSize(9.5);
+      for (const col of section.columns) {
+        doc.text(col.label, x + 2, headerY, { width: col.width - 4, align: col.align ?? "left" });
+        x += col.width;
+      }
+      doc.y = headerY + 14;
+      doc.moveTo(left, doc.y).lineTo(left + pageWidth, doc.y).stroke();
+      doc.moveDown(0.3);
+
+      for (const row of section.rows) {
+        if (doc.y + rowHeight > doc.page.height - doc.page.margins.bottom) doc.addPage();
+        doc.font(row.bold ? "Helvetica-Bold" : "Helvetica").fontSize(9.5);
+        x = left;
+        const y = doc.y;
+        for (let i = 0; i < section.columns.length; i++) {
+          const col = section.columns[i];
+          doc.text(row.cells[i] ?? "", x + 2, y, { width: col.width - 4, align: col.align ?? "left" });
+          x += col.width;
+        }
+        doc.y = y + rowHeight;
+        if (row.bold) {
+          doc.moveTo(left, doc.y - 3).lineTo(left + pageWidth, doc.y - 3).stroke();
+        }
+      }
+
+      doc.moveDown(1);
+    }
+
+    doc.end();
+  });
+}
+
+export async function generateTrialBalancePdf(businessId: string): Promise<Buffer> {
+  const business = await prisma.business.findUniqueOrThrow({ where: { id: businessId } });
+  const accounts = await prisma.account.findMany({ where: { businessId }, orderBy: { code: "asc" } });
+  const currency = business.currency;
+
+  const columns: ReportColumn[] = [
+    { label: "Code", width: 60 },
+    { label: "Account", width: 260 },
+    { label: "Debit", width: 100, align: "right" },
+    { label: "Credit", width: 100, align: "right" },
+  ];
+
+  let totalDebit = 0;
+  let totalCredit = 0;
+  const rows: ReportRow[] = accounts.map((a) => {
+    const balance = Number(a.balance);
+    const isDebitNormal = a.type === "ASSET" || a.type === "EXPENSE";
+    const debit = isDebitNormal ? Math.max(balance, 0) : Math.max(-balance, 0);
+    const credit = isDebitNormal ? Math.max(-balance, 0) : Math.max(balance, 0);
+    totalDebit += debit;
+    totalCredit += credit;
+    return {
+      cells: [
+        a.code,
+        a.name,
+        debit > 0 ? formatCurrency(debit, currency) : "",
+        credit > 0 ? formatCurrency(credit, currency) : "",
+      ],
+    };
+  });
+  rows.push({
+    cells: ["", "Total", formatCurrency(totalDebit, currency), formatCurrency(totalCredit, currency)],
+    bold: true,
+  });
+
+  return renderTabularReportPdf(business.name, "Trial Balance", [{ heading: "All Accounts", columns, rows }]);
+}
+
+export async function generateBalanceSheetPdf(businessId: string): Promise<Buffer> {
+  const business = await prisma.business.findUniqueOrThrow({ where: { id: businessId } });
+  const accounts = await prisma.account.findMany({ where: { businessId }, orderBy: { code: "asc" } });
+  const currency = business.currency;
+
+  const columns: ReportColumn[] = [
+    { label: "Code", width: 70 },
+    { label: "Account", width: 320 },
+    { label: "Amount", width: 130, align: "right" },
+  ];
+
+  const byType = (type: AccountType) => accounts.filter((a) => a.type === type);
+  const sumOf = (type: AccountType) => byType(type).reduce((s, a) => s + Number(a.balance), 0);
+  const toRows = (type: AccountType) =>
+    byType(type).map((a) => ({ cells: [a.code, a.name, formatCurrency(Number(a.balance), currency)] }));
+
+  const totalAssets = sumOf("ASSET");
+  const totalLiabilities = sumOf("LIABILITY");
+  const explicitEquity = sumOf("EQUITY");
+  // Undistributed profit/loss to date — closes Income and Expense into Equity so the
+  // sheet balances without requiring a formal period-end closing entry.
+  const retainedEarnings = sumOf("INCOME") - sumOf("EXPENSE");
+  const totalEquity = explicitEquity + retainedEarnings;
+
+  const equityRows = toRows("EQUITY");
+  equityRows.push({ cells: ["", "Retained Earnings (net income to date)", formatCurrency(retainedEarnings, currency)] });
+
+  return renderTabularReportPdf(business.name, "Balance Sheet", [
+    {
+      heading: "Assets",
+      columns,
+      rows: [...toRows("ASSET"), { cells: ["", "Total Assets", formatCurrency(totalAssets, currency)], bold: true }],
+    },
+    {
+      heading: "Liabilities",
+      columns,
+      rows: [
+        ...toRows("LIABILITY"),
+        { cells: ["", "Total Liabilities", formatCurrency(totalLiabilities, currency)], bold: true },
+      ],
+    },
+    {
+      heading: "Equity",
+      columns,
+      rows: [...equityRows, { cells: ["", "Total Equity", formatCurrency(totalEquity, currency)], bold: true }],
+    },
+    {
+      heading: "Check",
+      columns,
+      rows: [
+        {
+          cells: ["", "Total Liabilities + Equity", formatCurrency(totalLiabilities + totalEquity, currency)],
+          bold: true,
+        },
+      ],
+    },
+  ]);
+}
+
+export async function generateIncomeStatementPdf(businessId: string): Promise<Buffer> {
+  const business = await prisma.business.findUniqueOrThrow({ where: { id: businessId } });
+  const accounts = await prisma.account.findMany({ where: { businessId }, orderBy: { code: "asc" } });
+  const currency = business.currency;
+
+  const columns: ReportColumn[] = [
+    { label: "Code", width: 70 },
+    { label: "Account", width: 320 },
+    { label: "Amount", width: 130, align: "right" },
+  ];
+
+  const byType = (type: AccountType) => accounts.filter((a) => a.type === type);
+  const sumOf = (type: AccountType) => byType(type).reduce((s, a) => s + Number(a.balance), 0);
+  const toRows = (type: AccountType) =>
+    byType(type).map((a) => ({ cells: [a.code, a.name, formatCurrency(Number(a.balance), currency)] }));
+
+  const totalRevenue = sumOf("INCOME");
+  const totalExpenses = sumOf("EXPENSE");
+  const netIncome = totalRevenue - totalExpenses;
+
+  return renderTabularReportPdf(business.name, "Income Statement", [
+    {
+      heading: "Revenue",
+      columns,
+      rows: [...toRows("INCOME"), { cells: ["", "Total Revenue", formatCurrency(totalRevenue, currency)], bold: true }],
+    },
+    {
+      heading: "Expenses",
+      columns,
+      rows: [
+        ...toRows("EXPENSE"),
+        { cells: ["", "Total Expenses", formatCurrency(totalExpenses, currency)], bold: true },
+      ],
+    },
+    {
+      heading: "Result",
+      columns,
+      rows: [{ cells: ["", netIncome >= 0 ? "Net Profit" : "Net Loss", formatCurrency(netIncome, currency)], bold: true }],
+    },
+  ]);
+}
+
 export async function generateGeneralLedgerPdf(businessId: string): Promise<Buffer> {
   const business = await prisma.business.findUniqueOrThrow({ where: { id: businessId } });
   const currency = business.currency;

@@ -62,13 +62,23 @@ export function useJournalEntries(params: { page?: number; pageSize?: number }) 
   });
 }
 
-/** Downloads the General Ledger PDF through the authenticated API client (a plain <a href> can't carry the bearer token). */
-export async function downloadGeneralLedgerPdf() {
-  const response = await apiClient.get("/accounting/ledger/pdf", { responseType: "blob" });
+export type AccountingReportKind = "ledger" | "trial-balance" | "balance-sheet" | "income-statement";
+
+const REPORT_ENDPOINTS: Record<AccountingReportKind, { path: string; filename: string }> = {
+  ledger: { path: "/accounting/ledger/pdf", filename: "general-ledger.pdf" },
+  "trial-balance": { path: "/accounting/trial-balance/pdf", filename: "trial-balance.pdf" },
+  "balance-sheet": { path: "/accounting/balance-sheet/pdf", filename: "balance-sheet.pdf" },
+  "income-statement": { path: "/accounting/income-statement/pdf", filename: "income-statement.pdf" },
+};
+
+/** Downloads an accounting report PDF through the authenticated API client (a plain <a href> can't carry the bearer token). */
+export async function downloadAccountingReportPdf(kind: AccountingReportKind) {
+  const { path, filename } = REPORT_ENDPOINTS[kind];
+  const response = await apiClient.get(path, { responseType: "blob" });
   const url = URL.createObjectURL(response.data as Blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "general-ledger.pdf";
+  link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
 }

@@ -32,3 +32,24 @@ export const downloadGeneralLedgerPdf = asyncHandler(async (req: Request, res: R
   res.setHeader("Content-Disposition", `attachment; filename="general-ledger.pdf"`);
   res.send(pdf);
 });
+
+export const downloadTrialBalancePdf = asyncHandler(async (req: Request, res: Response) => {
+  const pdf = await accountingService.generateTrialBalancePdf(req.user!.businessId!);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="trial-balance.pdf"`);
+  res.send(pdf);
+});
+
+export const downloadBalanceSheetPdf = asyncHandler(async (req: Request, res: Response) => {
+  const pdf = await accountingService.generateBalanceSheetPdf(req.user!.businessId!);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="balance-sheet.pdf"`);
+  res.send(pdf);
+});
+
+export const downloadIncomeStatementPdf = asyncHandler(async (req: Request, res: Response) => {
+  const pdf = await accountingService.generateIncomeStatementPdf(req.user!.businessId!);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="income-statement.pdf"`);
+  res.send(pdf);
+});

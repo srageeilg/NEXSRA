@@ -1,34 +1,73 @@
 "use client";
 
+import { useState } from "react";
 import { Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreateAccountDialog } from "@/components/accounting/create-account-dialog";
 import { CreateJournalEntryDialog } from "@/components/accounting/create-journal-entry-dialog";
-import { useAccounts, useJournalEntries, downloadGeneralLedgerPdf } from "@/hooks/use-accounting";
+import {
+  useAccounts,
+  useJournalEntries,
+  downloadAccountingReportPdf,
+  type AccountingReportKind,
+} from "@/hooks/use-accounting";
 import { formatCurrency, formatDate } from "@/lib/utils";
+
+const REPORT_OPTIONS: { value: AccountingReportKind; label: string }[] = [
+  { value: "ledger", label: "General Ledger" },
+  { value: "trial-balance", label: "Trial Balance" },
+  { value: "balance-sheet", label: "Balance Sheet" },
+  { value: "income-statement", label: "Income Statement (P&L)" },
+];
 
 export default function AccountingPage() {
   const { data: accounts, isLoading: accountsLoading } = useAccounts();
   const { data: journalData, isLoading: journalLoading } = useJournalEntries({ pageSize: 30 });
+  const [reportKind, setReportKind] = useState<AccountingReportKind>("ledger");
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      await downloadAccountingReportPdf(reportKind);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Accounting</h1>
           <p className="text-sm text-muted-foreground">
             Chart of accounts and journal — sales, purchases, and expenses post here automatically.
           </p>
         </div>
-        <Button variant="outline" onClick={() => downloadGeneralLedgerPdf()}>
-          <Download className="mr-1.5 h-4 w-4" />
-          Download General Ledger
-        </Button>
+        <div className="flex items-center gap-2">
+          <Select value={reportKind} onValueChange={(v) => setReportKind(v as AccountingReportKind)}>
+            <SelectTrigger className="w-56">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {REPORT_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" onClick={handleDownload} disabled={downloading}>
+            <Download className="mr-1.5 h-4 w-4" />
+            {downloading ? "Generating..." : "Download PDF"}
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="accounts">

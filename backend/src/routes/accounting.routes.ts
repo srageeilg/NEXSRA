@@ -12,6 +12,13 @@ router.get("/accounts", requirePermission("accounting.view"), accountingControll
 router.post("/accounts", requirePermission("accounting.create"), validate(createAccountSchema), accountingController.createAccount);
 
 router.get("/ledger/pdf", requirePermission("accounting.view"), accountingController.downloadGeneralLedgerPdf);
+router.get("/trial-balance/pdf", requirePermission("accounting.view"), accountingController.downloadTrialBalancePdf);
+router.get("/balance-sheet/pdf", requirePermission("accounting.view"), accountingController.downloadBalanceSheetPdf);
+router.get(
+  "/income-statement/pdf",
+  requirePermission("accounting.view"),
+  accountingController.downloadIncomeStatementPdf,
+);
 
 router.get("/journal-entries", requirePermission("accounting.view"), accountingController.listJournalEntries);
 router.post(
