@@ -12,3 +12,4 @@ backend/uploads/*
 coverage/
 .turbo/
 *.tsbuildinfo
+.claude/
