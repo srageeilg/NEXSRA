@@ -6,7 +6,7 @@ const purchaseItemSchema = z.object({
   quantityOrdered: z.coerce.number().int().positive(),
   unitCost: z.coerce.number().nonnegative(),
   discount: z.coerce.number().nonnegative().default(0),
-  taxRate: z.coerce.number().nonnegative().default(0),
+  taxRate: z.coerce.number().min(0).max(100).default(13),
 });
 
 export const createPurchaseOrderSchema = z.object({

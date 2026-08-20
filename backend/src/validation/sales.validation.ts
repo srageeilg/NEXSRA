@@ -6,7 +6,7 @@ const orderItemSchema = z.object({
   quantity: z.coerce.number().int().positive(),
   unitPrice: z.coerce.number().nonnegative(),
   discount: z.coerce.number().nonnegative().default(0),
-  taxRate: z.coerce.number().nonnegative().default(0),
+  taxRate: z.coerce.number().min(0).max(100).default(13),
 });
 
 export const createSalesOrderSchema = z.object({
@@ -36,6 +36,8 @@ export const posCheckoutSchema = z.object({
         }),
       )
       .min(1),
+    requiresVcts: z.coerce.boolean().default(false),
+    vehicleNumber: z.string().max(20).optional(),
   }),
 });
 

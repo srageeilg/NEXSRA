@@ -44,13 +44,25 @@ export interface PosCheckoutInput {
   items: CartItem[];
   discountTotal?: number;
   payments: { method: string; amount: number; reference?: string }[];
+  requiresVcts?: boolean;
+  vehicleNumber?: string;
+}
+
+export interface CheckoutInvoice {
+  id: string;
+  invoiceNumber: string;
+  grandTotal: string;
+  requiresVcts: boolean;
+  vehicleNumber: string | null;
+  customer?: { name: string; panNumber?: string | null } | null;
+  items: { quantity: number; unitPrice: string; total: string; product: { name: string; sku: string } }[];
 }
 
 export function usePosCheckout() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: PosCheckoutInput) =>
-      (await apiClient.post<ApiResponse<{ order: SalesOrder; invoice: { id: string; invoiceNumber: string } }>>(
+      (await apiClient.post<ApiResponse<{ order: SalesOrder; invoice: CheckoutInvoice }>>(
         "/sales/pos/checkout",
         input,
       )).data,

@@ -1,19 +1,25 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, Plus, Minus, Trash2, ShoppingCart } from "lucide-react";
+import { Search, Plus, Minus, Trash2, ShoppingCart, Truck, Copy, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useProducts, type Product } from "@/hooks/use-products";
 import { useWarehouses } from "@/hooks/use-warehouses";
 import { useCustomers } from "@/hooks/use-customers";
-import { usePosCheckout, type CartItem } from "@/hooks/use-sales";
+import { usePosCheckout, type CartItem, type CheckoutInvoice } from "@/hooks/use-sales";
 import { downloadInvoicePdf } from "@/hooks/use-invoices";
 import { formatCurrency } from "@/lib/utils";
+import { toast } from "sonner";
+
+const VCTS_LOGIN_URL = "https://vctsdri.dri.gov.np/login";
+const VAT_RATE = 13;
 
 interface CartLine extends CartItem {
   name: string;
@@ -26,6 +32,9 @@ export default function PosPage() {
   const [customerId, setCustomerId] = useState<string>();
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [requiresVcts, setRequiresVcts] = useState(false);
+  const [vehicleNumber, setVehicleNumber] = useState("");
+  const [vctsInvoice, setVctsInvoice] = useState<CheckoutInvoice | null>(null);
 
   const { data: productsData, isLoading: productsLoading } = useProducts({ search: search || undefined, pageSize: 30, isActive: true });
   const { data: warehouses } = useWarehouses();
@@ -71,23 +80,61 @@ export default function PosPage() {
   const removeLine = (productId: string) => setCart((prev) => prev.filter((l) => l.productId !== productId));
 
   const subTotal = useMemo(() => cart.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0), [cart]);
+  const vatTotal = useMemo(() => subTotal * (VAT_RATE / 100), [subTotal]);
+  const grandTotal = subTotal + vatTotal;
 
   const handleCheckout = () => {
     if (!warehouseId || cart.length === 0) return;
+    if (requiresVcts && !vehicleNumber.trim()) {
+      toast.error("Enter the vehicle number for the VCTS bill");
+      return;
+    }
     checkout.mutate(
       {
         warehouseId,
         customerId,
-        items: cart.map(({ productId, quantity, unitPrice }) => ({ productId, quantity, unitPrice })),
-        payments: [{ method: paymentMethod, amount: subTotal }],
+        items: cart.map(({ productId, quantity, unitPrice }) => ({ productId, quantity, unitPrice, taxRate: VAT_RATE })),
+        payments: [{ method: paymentMethod, amount: grandTotal }],
+        requiresVcts,
+        vehicleNumber: requiresVcts ? vehicleNumber.trim() : undefined,
       },
       {
         onSuccess: (data) => {
           setCart([]);
           downloadInvoicePdf(data.data.invoice.id, data.data.invoice.invoiceNumber);
+          if (data.data.invoice.requiresVcts) {
+            setVctsInvoice(data.data.invoice);
+          }
+          setRequiresVcts(false);
+          setVehicleNumber("");
         },
       },
     );
+  };
+
+  const vctsSummary = useMemo(() => {
+    if (!vctsInvoice) return "";
+    const lines = [
+      `Invoice: ${vctsInvoice.invoiceNumber}`,
+      `Vehicle number: ${vctsInvoice.vehicleNumber ?? ""}`,
+      `Customer: ${vctsInvoice.customer?.name ?? "Walk-in"}`,
+      `Customer PAN: ${vctsInvoice.customer?.panNumber ?? "N/A"}`,
+      `Total amount: ${vctsInvoice.grandTotal}`,
+      "Items:",
+      ...vctsInvoice.items.map(
+        (i) => `  - ${i.product.name} (${i.product.sku}) x${i.quantity} @ ${i.unitPrice} = ${i.total}`,
+      ),
+    ];
+    return lines.join("\n");
+  }, [vctsInvoice]);
+
+  const copyVctsSummary = async () => {
+    await navigator.clipboard.writeText(vctsSummary);
+    toast.success("Bill details copied — paste them into the VCTS form");
+  };
+
+  const openVctsPortal = () => {
+    window.open(VCTS_LOGIN_URL, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -218,9 +265,36 @@ export default function PosPage() {
             </Select>
           </div>
 
-          <div className="flex items-center justify-between border-t pt-3 text-lg font-semibold">
-            <span>Total</span>
-            <span>{formatCurrency(subTotal)}</span>
+          <div className="space-y-2 rounded-lg border p-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="vcts-toggle" className="flex items-center gap-2 text-sm">
+                <Truck className="h-4 w-4" />
+                Dispatch by vehicle (VCTS required)
+              </Label>
+              <Switch id="vcts-toggle" checked={requiresVcts} onCheckedChange={setRequiresVcts} />
+            </div>
+            {requiresVcts && (
+              <Input
+                placeholder="Vehicle number (e.g. BA 2 KHA 1234)"
+                value={vehicleNumber}
+                onChange={(e) => setVehicleNumber(e.target.value)}
+              />
+            )}
+          </div>
+
+          <div className="space-y-1 border-t pt-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span>Subtotal</span>
+              <span>{formatCurrency(subTotal)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>VAT ({VAT_RATE}%)</span>
+              <span>{formatCurrency(vatTotal)}</span>
+            </div>
+            <div className="flex items-center justify-between pt-1 text-lg font-semibold">
+              <span>Total</span>
+              <span>{formatCurrency(grandTotal)}</span>
+            </div>
           </div>
 
           <Button
@@ -233,6 +307,35 @@ export default function PosPage() {
           </Button>
         </CardContent>
       </Card>
+
+      <Dialog open={!!vctsInvoice} onOpenChange={(o) => !o && setVctsInvoice(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Truck className="h-4 w-4" />
+              VCTS bill required
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This sale is being dispatched by vehicle. NEXSRA does not have official API access to VCTS
+            (vctsdri.dri.gov.np), so you&apos;ll need to log in and file the bill yourself — copy these
+            details below to paste into the VCTS form.
+          </p>
+          <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg border bg-muted p-3 text-xs">
+            {vctsSummary}
+          </pre>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={copyVctsSummary}>
+              <Copy className="mr-2 h-4 w-4" />
+              Copy details
+            </Button>
+            <Button onClick={openVctsPortal}>
+              <ExternalLink className="mr-2 h-4 w-4" />
+              Open VCTS portal
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

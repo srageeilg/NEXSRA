@@ -23,6 +23,12 @@ interface CreatePurchaseOrderInput {
   notes?: string;
 }
 
+const DEFAULT_VAT_RATE = 13;
+
+function withDefaultVat(item: PurchaseItemInput): PurchaseItemInput {
+  return { ...item, taxRate: item.taxRate ?? DEFAULT_VAT_RATE };
+}
+
 function computeItemTotal(item: PurchaseItemInput) {
   const gross = item.quantityOrdered * item.unitCost;
   const afterDiscount = gross - (item.discount ?? 0);
@@ -37,14 +43,15 @@ export async function createPurchaseOrder(businessId: string, input: CreatePurch
   const warehouse = await prisma.warehouse.findFirst({ where: { id: input.warehouseId, businessId } });
   if (!warehouse) throw ApiError.notFound("Warehouse not found");
 
-  const subTotal = input.items.reduce((sum, i) => sum + i.quantityOrdered * i.unitCost, 0);
-  const taxTotal = input.items.reduce((sum, i) => {
+  const items = input.items.map(withDefaultVat);
+  const subTotal = items.reduce((sum, i) => sum + i.quantityOrdered * i.unitCost, 0);
+  const taxTotal = items.reduce((sum, i) => {
     const afterDiscount = i.quantityOrdered * i.unitCost - (i.discount ?? 0);
     return sum + afterDiscount * ((i.taxRate ?? 0) / 100);
   }, 0);
-  const itemDiscountTotal = input.items.reduce((sum, i) => sum + (i.discount ?? 0), 0);
+  const itemDiscountTotal = items.reduce((sum, i) => sum + (i.discount ?? 0), 0);
   const discountTotal = itemDiscountTotal + (input.discountTotal ?? 0);
-  const grandTotal = input.items.reduce((sum, i) => sum + computeItemTotal(i), 0) - (input.discountTotal ?? 0);
+  const grandTotal = items.reduce((sum, i) => sum + computeItemTotal(i), 0) - (input.discountTotal ?? 0);
 
   return prisma.$transaction(async (tx) => {
     const poNumber = await nextSequenceNumber(tx, "purchaseOrder", businessId, "PO");
@@ -63,7 +70,7 @@ export async function createPurchaseOrder(businessId: string, input: CreatePurch
         discountTotal,
         grandTotal,
         items: {
-          create: input.items.map((i) => ({
+          create: items.map((i) => ({
             productId: i.productId,
             variantId: i.variantId,
             quantityOrdered: i.quantityOrdered,

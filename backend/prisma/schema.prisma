@@ -929,6 +929,9 @@ model Invoice {
   amountPaid    Decimal @default(0) @db.Decimal(14, 2)
   pdfUrl        String?
 
+  requiresVcts  Boolean @default(false)
+  vehicleNumber String?
+
   items    InvoiceItem[]
   payments Payment[]
 

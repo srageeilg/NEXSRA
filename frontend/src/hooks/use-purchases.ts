@@ -43,7 +43,7 @@ export function usePurchaseOrders(params: { status?: string; page?: number; page
 export interface CreatePurchaseOrderInput {
   supplierId: string;
   warehouseId: string;
-  items: { productId: string; quantityOrdered: number; unitCost: number }[];
+  items: { productId: string; quantityOrdered: number; unitCost: number; taxRate: number }[];
 }
 
 export function useCreatePurchaseOrder() {

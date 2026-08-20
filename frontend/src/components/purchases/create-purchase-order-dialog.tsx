@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useFieldArray, useForm, Controller } from "react-hook-form";
+import { useFieldArray, useForm, Controller, useWatch } from "react-hook-form";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,11 +19,14 @@ import { useProducts } from "@/hooks/use-products";
 import { useWarehouses } from "@/hooks/use-warehouses";
 import { useSuppliers } from "@/hooks/use-suppliers";
 import { useCreatePurchaseOrder } from "@/hooks/use-purchases";
+import { formatCurrency } from "@/lib/utils";
+
+const VAT_RATE = 13;
 
 interface FormValues {
   supplierId: string;
   warehouseId: string;
-  items: { productId: string; quantityOrdered: number; unitCost: number }[];
+  items: { productId: string; quantityOrdered: number; unitCost: number; taxRate: number }[];
 }
 
 export function CreatePurchaseOrderDialog() {
@@ -34,9 +37,12 @@ export function CreatePurchaseOrderDialog() {
   const createPO = useCreatePurchaseOrder();
 
   const { register, handleSubmit, control, reset, setValue } = useForm<FormValues>({
-    defaultValues: { items: [{ productId: "", quantityOrdered: 1, unitCost: 0 }] },
+    defaultValues: { items: [{ productId: "", quantityOrdered: 1, unitCost: 0, taxRate: VAT_RATE }] },
   });
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
+  const watchedItems = useWatch({ control, name: "items" });
+  const subTotal = watchedItems.reduce((sum, item) => sum + (item.quantityOrdered || 0) * (item.unitCost || 0), 0);
+  const vatTotal = subTotal * (VAT_RATE / 100);
 
   // Default to the business's primary warehouse so this doesn't need picking every time.
   useEffect(() => {
@@ -49,7 +55,7 @@ export function CreatePurchaseOrderDialog() {
     createPO.mutate(values, {
       onSuccess: () => {
         setOpen(false);
-        reset({ items: [{ productId: "", quantityOrdered: 1, unitCost: 0 }] });
+        reset({ items: [{ productId: "", quantityOrdered: 1, unitCost: 0, taxRate: VAT_RATE }] });
       },
     });
   };
@@ -150,6 +156,7 @@ export function CreatePurchaseOrderDialog() {
                   placeholder="Unit cost"
                   {...register(`items.${index}.unitCost`, { required: true, valueAsNumber: true })}
                 />
+                <input type="hidden" {...register(`items.${index}.taxRate`, { valueAsNumber: true })} />
                 <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)} disabled={fields.length === 1}>
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -159,11 +166,17 @@ export function CreatePurchaseOrderDialog() {
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => append({ productId: "", quantityOrdered: 1, unitCost: 0 })}
+              onClick={() => append({ productId: "", quantityOrdered: 1, unitCost: 0, taxRate: VAT_RATE })}
             >
               <Plus className="mr-1 h-3.5 w-3.5" />
               Add item
             </Button>
+          </div>
+
+          <div className="space-y-1 border-t pt-3 text-sm">
+            <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(subTotal)}</span></div>
+            <div className="flex justify-between"><span>VAT ({VAT_RATE}%)</span><span>{formatCurrency(vatTotal)}</span></div>
+            <div className="flex justify-between font-semibold"><span>Total</span><span>{formatCurrency(subTotal + vatTotal)}</span></div>
           </div>
 
           <DialogFooter>

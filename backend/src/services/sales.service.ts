@@ -5,6 +5,8 @@ import { applyStockDelta } from "./inventory.service";
 import { nextSequenceNumber } from "../utils/orderNumber";
 import { ensureDefaultAccounts, postAutoJournalEntry, LEDGER_ACCOUNT_CODES } from "./ledger.service";
 
+const DEFAULT_VAT_RATE = 13;
+
 interface OrderItemInput {
   productId: string;
   variantId?: string;
@@ -33,6 +35,10 @@ function computeTotals(items: OrderItemInput[], orderDiscount = 0) {
   return { subTotal, taxTotal, discountTotal, grandTotal };
 }
 
+function withDefaultVat(item: OrderItemInput): OrderItemInput {
+  return { ...item, taxRate: item.taxRate ?? DEFAULT_VAT_RATE };
+}
+
 interface CreateSalesOrderInput {
   customerId?: string;
   branchId?: string;
@@ -46,7 +52,8 @@ export async function createSalesOrder(businessId: string, input: CreateSalesOrd
   const warehouse = await prisma.warehouse.findFirst({ where: { id: input.warehouseId, businessId } });
   if (!warehouse) throw ApiError.notFound("Warehouse not found");
 
-  const totals = computeTotals(input.items, input.discountTotal ?? 0);
+  const items = input.items.map(withDefaultVat);
+  const totals = computeTotals(items, input.discountTotal ?? 0);
 
   return prisma.$transaction(async (tx) => {
     const orderNumber = await nextSequenceNumber(tx, "salesOrder", businessId, "SO");
@@ -62,7 +69,7 @@ export async function createSalesOrder(businessId: string, input: CreateSalesOrd
         createdById,
         ...totals,
         items: {
-          create: input.items.map((i) => ({
+          create: items.map((i) => ({
             productId: i.productId,
             variantId: i.variantId,
             quantity: i.quantity,
@@ -90,6 +97,8 @@ interface PosCheckoutInput {
   items: OrderItemInput[];
   discountTotal?: number;
   payments: PosPaymentInput[];
+  requiresVcts?: boolean;
+  vehicleNumber?: string;
 }
 
 /** Single-transaction POS sale: creates the order, an invoice, deducts stock, records payment(s), and updates the customer ledger for any unpaid balance. */
@@ -97,7 +106,8 @@ export async function posCheckout(businessId: string, input: PosCheckoutInput, c
   const warehouse = await prisma.warehouse.findFirst({ where: { id: input.warehouseId, businessId } });
   if (!warehouse) throw ApiError.notFound("Warehouse not found");
 
-  const totals = computeTotals(input.items, input.discountTotal ?? 0);
+  const items = input.items.map(withDefaultVat);
+  const totals = computeTotals(items, input.discountTotal ?? 0);
   const amountPaid = input.payments.reduce((sum, p) => sum + p.amount, 0);
 
   return prisma.$transaction(
@@ -114,7 +124,7 @@ export async function posCheckout(businessId: string, input: PosCheckoutInput, c
         createdById,
         ...totals,
         items: {
-          create: input.items.map((i) => ({
+          create: items.map((i) => ({
             productId: i.productId,
             variantId: i.variantId,
             quantity: i.quantity,
@@ -162,6 +172,8 @@ export async function posCheckout(businessId: string, input: PosCheckoutInput, c
         discountTotal: totals.discountTotal,
         grandTotal: totals.grandTotal,
         amountPaid,
+        requiresVcts: input.requiresVcts ?? false,
+        vehicleNumber: input.vehicleNumber,
         items: {
           create: order.items.map((i) => ({
             productId: i.productId,
@@ -173,6 +185,10 @@ export async function posCheckout(businessId: string, input: PosCheckoutInput, c
             total: i.total,
           })),
         },
+      },
+      include: {
+        customer: true,
+        items: { include: { product: { select: { id: true, name: true, sku: true } } } },
       },
     });
 
