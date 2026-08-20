@@ -762,6 +762,8 @@ model PurchaseOrder {
   expectedDate DateTime?
 
   subTotal      Decimal @default(0) @db.Decimal(14, 2)
+  vatRate       Decimal @default(0.13) @db.Decimal(5, 4)
+  vatAmount     Decimal @default(0) @db.Decimal(14, 2)
   taxTotal      Decimal @default(0) @db.Decimal(14, 2)
   discountTotal Decimal @default(0) @db.Decimal(14, 2)
   grandTotal    Decimal @default(0) @db.Decimal(14, 2)
@@ -865,6 +867,8 @@ model SalesOrder {
   orderDate   DateTime         @default(now())
 
   subTotal      Decimal @default(0) @db.Decimal(14, 2)
+  vatRate       Decimal @default(0.13) @db.Decimal(5, 4)
+  vatAmount     Decimal @default(0) @db.Decimal(14, 2)
   taxTotal      Decimal @default(0) @db.Decimal(14, 2)
   discountTotal Decimal @default(0) @db.Decimal(14, 2)
   grandTotal    Decimal @default(0) @db.Decimal(14, 2)
@@ -1046,6 +1050,8 @@ model JournalEntry {
   businessId  String
   business    Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
   reference   String?
+  sourceType  String?
+  sourceId    String?
   description String
   entryDate   DateTime      @default(now())
   lines       JournalLine[]
@@ -1053,6 +1059,7 @@ model JournalEntry {
   createdAt DateTime @default(now())
 
   @@index([businessId])
+  @@unique([businessId, sourceType, sourceId])
   @@map("journal_entries")
 }
 

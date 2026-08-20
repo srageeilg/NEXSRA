@@ -5,7 +5,8 @@ import { applyStockDelta } from "./inventory.service";
 import { nextSequenceNumber } from "../utils/orderNumber";
 import { ensureDefaultAccounts, postAutoJournalEntry, LEDGER_ACCOUNT_CODES } from "./ledger.service";
 
-const DEFAULT_VAT_RATE = 13;
+const DEFAULT_VAT_RATE = 0.13;
+const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 interface OrderItemInput {
   productId: string;
@@ -19,24 +20,21 @@ interface OrderItemInput {
 function computeItemTotal(item: OrderItemInput) {
   const gross = item.quantity * item.unitPrice;
   const afterDiscount = gross - (item.discount ?? 0);
-  const tax = afterDiscount * ((item.taxRate ?? 0) / 100);
+  const tax = afterDiscount * (item.taxRate ?? 0);
   return afterDiscount + tax;
 }
 
 function computeTotals(items: OrderItemInput[], orderDiscount = 0) {
-  const subTotal = items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
-  const taxTotal = items.reduce((sum, i) => {
-    const afterDiscount = i.quantity * i.unitPrice - (i.discount ?? 0);
-    return sum + afterDiscount * ((i.taxRate ?? 0) / 100);
-  }, 0);
+  const subTotal = roundMoney(items.reduce((sum, i) => sum + i.quantity * i.unitPrice - (i.discount ?? 0), 0) - orderDiscount);
+  const taxTotal = roundMoney(subTotal * DEFAULT_VAT_RATE);
   const itemDiscountTotal = items.reduce((sum, i) => sum + (i.discount ?? 0), 0);
   const discountTotal = itemDiscountTotal + orderDiscount;
-  const grandTotal = items.reduce((sum, i) => sum + computeItemTotal(i), 0) - orderDiscount;
-  return { subTotal, taxTotal, discountTotal, grandTotal };
+  const grandTotal = roundMoney(subTotal + taxTotal);
+  return { subTotal, vatRate: DEFAULT_VAT_RATE, vatAmount: taxTotal, taxTotal, discountTotal, grandTotal };
 }
 
 function withDefaultVat(item: OrderItemInput): OrderItemInput {
-  return { ...item, taxRate: item.taxRate ?? DEFAULT_VAT_RATE };
+  return { ...item, taxRate: DEFAULT_VAT_RATE };
 }
 
 interface CreateSalesOrderInput {
@@ -58,7 +56,7 @@ export async function createSalesOrder(businessId: string, input: CreateSalesOrd
   return prisma.$transaction(async (tx) => {
     const orderNumber = await nextSequenceNumber(tx, "salesOrder", businessId, "SO");
 
-    return tx.salesOrder.create({
+    const order = await tx.salesOrder.create({
       data: {
         businessId,
         customerId: input.customerId,
@@ -82,6 +80,20 @@ export async function createSalesOrder(businessId: string, input: CreateSalesOrd
       },
       include: { items: true, customer: true },
     });
+
+    await ensureDefaultAccounts(tx, businessId);
+    await postAutoJournalEntry(tx, businessId, {
+      description: `Sales Order ${order.orderNumber}`,
+      reference: order.orderNumber,
+      sourceType: "SALES_ORDER",
+      sourceId: order.id,
+      lines: [
+        { code: LEDGER_ACCOUNT_CODES.ACCOUNTS_RECEIVABLE, type: "DEBIT", amount: Number(order.grandTotal) },
+        { code: LEDGER_ACCOUNT_CODES.SALES_REVENUE, type: "CREDIT", amount: Number(order.subTotal) },
+        { code: LEDGER_ACCOUNT_CODES.VAT_PAYABLE, type: "CREDIT", amount: Number(order.vatAmount) },
+      ],
+    });
+    return order;
   });
 }
 
@@ -230,10 +242,12 @@ export async function posCheckout(businessId: string, input: PosCheckoutInput, c
     // Auto-post to the general ledger: Cash/AR against Revenue+VAT, and COGS against Inventory.
     await ensureDefaultAccounts(tx, businessId);
 
-    const revenueAmount = totals.subTotal - totals.discountTotal;
+    const revenueAmount = totals.subTotal;
     await postAutoJournalEntry(tx, businessId, {
       description: `POS Sale ${orderNumber}`,
       reference: invoiceNumber,
+      sourceType: "SALES_ORDER",
+      sourceId: order.id,
       lines: [
         { code: LEDGER_ACCOUNT_CODES.CASH, type: "DEBIT", amount: amountPaid },
         { code: LEDGER_ACCOUNT_CODES.ACCOUNTS_RECEIVABLE, type: "DEBIT", amount: outstandingAmount },
@@ -252,6 +266,8 @@ export async function posCheckout(businessId: string, input: PosCheckoutInput, c
     await postAutoJournalEntry(tx, businessId, {
       description: `Cost of goods sold — ${orderNumber}`,
       reference: invoiceNumber,
+      sourceType: "SALES_ORDER_COGS",
+      sourceId: order.id,
       lines: [
         { code: LEDGER_ACCOUNT_CODES.COGS, type: "DEBIT", amount: cogsAmount },
         { code: LEDGER_ACCOUNT_CODES.INVENTORY, type: "CREDIT", amount: cogsAmount },

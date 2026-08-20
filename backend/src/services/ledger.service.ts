@@ -6,9 +6,11 @@ type Tx = Prisma.TransactionClient;
 const DEFAULT_ACCOUNTS: { code: string; name: string; type: AccountType }[] = [
   { code: "1000", name: "Cash", type: "ASSET" },
   { code: "1100", name: "Accounts Receivable", type: "ASSET" },
+  { code: "1110", name: "VAT Receivable (Input VAT)", type: "ASSET" },
   { code: "1200", name: "Inventory", type: "ASSET" },
+  { code: "1210", name: "Purchases/Inventory", type: "ASSET" },
   { code: "2000", name: "Accounts Payable", type: "LIABILITY" },
-  { code: "2100", name: "VAT Payable", type: "LIABILITY" },
+  { code: "2100", name: "VAT Payable (Output VAT)", type: "LIABILITY" },
   { code: "4000", name: "Sales Revenue", type: "INCOME" },
   { code: "5000", name: "Cost of Goods Sold", type: "EXPENSE" },
   { code: "5900", name: "General Expenses", type: "EXPENSE" },
@@ -20,6 +22,8 @@ export const LEDGER_ACCOUNT_CODES = {
   INVENTORY: "1200",
   ACCOUNTS_PAYABLE: "2000",
   VAT_PAYABLE: "2100",
+  VAT_RECEIVABLE: "1110",
+  PURCHASES_INVENTORY: "1210",
   SALES_REVENUE: "4000",
   COGS: "5000",
   GENERAL_EXPENSES: "5900",
@@ -33,6 +37,9 @@ export async function ensureDefaultAccounts(tx: Tx, businessId: string) {
   const missing = DEFAULT_ACCOUNTS.filter((a) => !existingCodes.has(a.code));
   if (missing.length > 0) {
     await tx.account.createMany({ data: missing.map((a) => ({ ...a, businessId })), skipDuplicates: true });
+  }
+  for (const account of DEFAULT_ACCOUNTS.filter((a) => existingCodes.has(a.code))) {
+    await tx.account.update({ where: { businessId_code: { businessId, code: account.code } }, data: { name: account.name, type: account.type } });
   }
 }
 
@@ -57,10 +64,15 @@ interface AutoJournalLine {
 export async function postAutoJournalEntry(
   tx: Tx,
   businessId: string,
-  input: { description: string; reference?: string; lines: AutoJournalLine[] },
+  input: { description: string; reference?: string; sourceType?: string; sourceId?: string; lines: AutoJournalLine[] },
 ) {
   const lines = input.lines.filter((l) => l.amount > 0.004);
   if (lines.length < 2) return null;
+
+  if (input.sourceType && input.sourceId) {
+    const existing = await tx.journalEntry.findFirst({ where: { businessId, sourceType: input.sourceType, sourceId: input.sourceId } });
+    if (existing) return existing;
+  }
 
   const totalDebits = lines.filter((l) => l.type === "DEBIT").reduce((s, l) => s + l.amount, 0);
   const totalCredits = lines.filter((l) => l.type === "CREDIT").reduce((s, l) => s + l.amount, 0);
@@ -81,6 +93,8 @@ export async function postAutoJournalEntry(
       businessId,
       description: input.description,
       reference: input.reference,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
       lines: {
         create: lines.map((l) => {
           const account = accountByCode.get(l.code);

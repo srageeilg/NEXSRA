@@ -4,6 +4,7 @@ import { AccountType, JournalEntryType } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { ApiError } from "../utils/ApiError";
 import { formatCurrency } from "../utils/format";
+import { LEDGER_ACCOUNT_CODES } from "./ledger.service";
 
 export async function listAccounts(businessId: string) {
   return prisma.account.findMany({ where: { businessId }, orderBy: { code: "asc" } });
@@ -292,21 +293,20 @@ export async function generateVatReturnPdf(businessId: string, from?: Date, to?:
   const start = from ?? dayjs().startOf("month").toDate();
   const end = to ?? dayjs().endOf("month").toDate();
 
-  const [invoices, purchases] = await Promise.all([
-    prisma.invoice.findMany({
-      where: { businessId, status: { in: [...ACTIVE_INVOICE_STATUSES] }, issueDate: { gte: start, lte: end } },
-      select: { subTotal: true, discountTotal: true, taxTotal: true },
-    }),
-    prisma.purchaseOrder.findMany({
-      where: { businessId, orderDate: { gte: start, lte: end } },
-      select: { subTotal: true, discountTotal: true, taxTotal: true },
-    }),
-  ]);
+  const entries = await prisma.journalEntry.findMany({
+    where: { businessId, entryDate: { gte: start, lte: end } },
+    include: { lines: { include: { account: { select: { code: true } } } } },
+  });
+  const lineAmount = (code: string, type: "DEBIT" | "CREDIT") =>
+    entries.reduce(
+      (sum, entry) => sum + entry.lines.filter((line) => line.account.code === code && line.type === type).reduce((s, line) => s + Number(line.amount), 0),
+      0,
+    );
 
-  const taxableSales = invoices.reduce((s, i) => s + Number(i.subTotal) - Number(i.discountTotal), 0);
-  const outputVat = invoices.reduce((s, i) => s + Number(i.taxTotal), 0);
-  const taxablePurchases = purchases.reduce((s, p) => s + Number(p.subTotal) - Number(p.discountTotal), 0);
-  const inputVat = purchases.reduce((s, p) => s + Number(p.taxTotal), 0);
+  const taxableSales = lineAmount(LEDGER_ACCOUNT_CODES.SALES_REVENUE, "CREDIT");
+  const outputVat = lineAmount(LEDGER_ACCOUNT_CODES.VAT_PAYABLE, "CREDIT");
+  const taxablePurchases = lineAmount(LEDGER_ACCOUNT_CODES.PURCHASES_INVENTORY, "DEBIT");
+  const inputVat = lineAmount(LEDGER_ACCOUNT_CODES.VAT_RECEIVABLE, "DEBIT");
   const netVat = outputVat - inputVat;
 
   const columns: ReportColumn[] = [

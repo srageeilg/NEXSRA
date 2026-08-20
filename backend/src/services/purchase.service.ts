@@ -23,16 +23,17 @@ interface CreatePurchaseOrderInput {
   notes?: string;
 }
 
-const DEFAULT_VAT_RATE = 13;
+const DEFAULT_VAT_RATE = 0.13;
+const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 function withDefaultVat(item: PurchaseItemInput): PurchaseItemInput {
-  return { ...item, taxRate: item.taxRate ?? DEFAULT_VAT_RATE };
+  return { ...item, taxRate: DEFAULT_VAT_RATE };
 }
 
 function computeItemTotal(item: PurchaseItemInput) {
   const gross = item.quantityOrdered * item.unitCost;
   const afterDiscount = gross - (item.discount ?? 0);
-  const tax = afterDiscount * ((item.taxRate ?? 0) / 100);
+  const tax = afterDiscount * (item.taxRate ?? 0);
   return afterDiscount + tax;
 }
 
@@ -44,19 +45,16 @@ export async function createPurchaseOrder(businessId: string, input: CreatePurch
   if (!warehouse) throw ApiError.notFound("Warehouse not found");
 
   const items = input.items.map(withDefaultVat);
-  const subTotal = items.reduce((sum, i) => sum + i.quantityOrdered * i.unitCost, 0);
-  const taxTotal = items.reduce((sum, i) => {
-    const afterDiscount = i.quantityOrdered * i.unitCost - (i.discount ?? 0);
-    return sum + afterDiscount * ((i.taxRate ?? 0) / 100);
-  }, 0);
+  const subTotal = roundMoney(items.reduce((sum, i) => sum + i.quantityOrdered * i.unitCost - (i.discount ?? 0), 0) - (input.discountTotal ?? 0));
+  const vatAmount = roundMoney(subTotal * DEFAULT_VAT_RATE);
   const itemDiscountTotal = items.reduce((sum, i) => sum + (i.discount ?? 0), 0);
   const discountTotal = itemDiscountTotal + (input.discountTotal ?? 0);
-  const grandTotal = items.reduce((sum, i) => sum + computeItemTotal(i), 0) - (input.discountTotal ?? 0);
+  const grandTotal = roundMoney(subTotal + vatAmount);
 
   return prisma.$transaction(async (tx) => {
     const poNumber = await nextSequenceNumber(tx, "purchaseOrder", businessId, "PO");
 
-    return tx.purchaseOrder.create({
+    const po = await tx.purchaseOrder.create({
       data: {
         businessId,
         supplierId: input.supplierId,
@@ -66,7 +64,9 @@ export async function createPurchaseOrder(businessId: string, input: CreatePurch
         expectedDate: input.expectedDate,
         notes: input.notes,
         subTotal,
-        taxTotal,
+        vatRate: DEFAULT_VAT_RATE,
+        vatAmount,
+        taxTotal: vatAmount,
         discountTotal,
         grandTotal,
         items: {
@@ -83,6 +83,20 @@ export async function createPurchaseOrder(businessId: string, input: CreatePurch
       },
       include: { items: true, supplier: true, warehouse: true },
     });
+
+    await ensureDefaultAccounts(tx, businessId);
+    await postAutoJournalEntry(tx, businessId, {
+      description: `Purchase Order ${po.poNumber}`,
+      reference: po.poNumber,
+      sourceType: "PURCHASE_ORDER",
+      sourceId: po.id,
+      lines: [
+        { code: LEDGER_ACCOUNT_CODES.PURCHASES_INVENTORY, type: "DEBIT", amount: Number(po.subTotal) },
+        { code: LEDGER_ACCOUNT_CODES.VAT_RECEIVABLE, type: "DEBIT", amount: Number(po.vatAmount) },
+        { code: LEDGER_ACCOUNT_CODES.ACCOUNTS_PAYABLE, type: "CREDIT", amount: Number(po.grandTotal) },
+      ],
+    });
+    return po;
   });
 }
 
@@ -177,20 +191,6 @@ export async function receiveGoods(businessId: string, poId: string, input: Rece
       });
 
       receivedCost += receipt.quantityReceived * Number(item.unitCost);
-    }
-
-    // Auto-post to the general ledger: receiving goods increases Inventory and the
-    // amount owed to the supplier (Accounts Payable).
-    if (receivedCost > 0) {
-      await ensureDefaultAccounts(tx, businessId);
-      await postAutoJournalEntry(tx, businessId, {
-        description: `Goods received — ${po.poNumber}`,
-        reference: po.poNumber,
-        lines: [
-          { code: LEDGER_ACCOUNT_CODES.INVENTORY, type: "DEBIT", amount: receivedCost },
-          { code: LEDGER_ACCOUNT_CODES.ACCOUNTS_PAYABLE, type: "CREDIT", amount: receivedCost },
-        ],
-      });
     }
 
     const refreshedItems = await tx.purchaseOrderItem.findMany({ where: { purchaseOrderId: poId } });
