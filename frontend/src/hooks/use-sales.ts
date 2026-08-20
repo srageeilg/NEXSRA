@@ -9,6 +9,9 @@ export interface SalesOrder {
   orderNumber: string;
   status: string;
   isPosSale: boolean;
+  subTotal: string;
+  vatRate: string;
+  vatAmount: string;
   grandTotal: string;
   createdAt: string;
   customer?: { id: string; name: string } | null;

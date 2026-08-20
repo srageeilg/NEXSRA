@@ -21,7 +21,7 @@ import { useSuppliers } from "@/hooks/use-suppliers";
 import { useCreatePurchaseOrder } from "@/hooks/use-purchases";
 import { formatCurrency } from "@/lib/utils";
 
-const VAT_RATE = 13;
+const VAT_RATE = 0.13;
 
 interface FormValues {
   supplierId: string;
@@ -42,7 +42,7 @@ export function CreatePurchaseOrderDialog() {
   const { fields, append, remove } = useFieldArray({ control, name: "items" });
   const watchedItems = useWatch({ control, name: "items" });
   const subTotal = watchedItems.reduce((sum, item) => sum + (item.quantityOrdered || 0) * (item.unitCost || 0), 0);
-  const vatTotal = subTotal * (VAT_RATE / 100);
+  const vatTotal = subTotal * VAT_RATE;
 
   // Default to the business's primary warehouse so this doesn't need picking every time.
   useEffect(() => {
@@ -175,7 +175,7 @@ export function CreatePurchaseOrderDialog() {
 
           <div className="space-y-1 border-t pt-3 text-sm">
             <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(subTotal)}</span></div>
-            <div className="flex justify-between"><span>VAT ({VAT_RATE}%)</span><span>{formatCurrency(vatTotal)}</span></div>
+            <div className="flex justify-between"><span>VAT ({VAT_RATE * 100}%)</span><span>{formatCurrency(vatTotal)}</span></div>
             <div className="flex justify-between font-semibold"><span>Total</span><span>{formatCurrency(subTotal + vatTotal)}</span></div>
           </div>
 

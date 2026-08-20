@@ -19,7 +19,7 @@ import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 
 const VCTS_LOGIN_URL = "https://vctsdri.dri.gov.np/login";
-const VAT_RATE = 13;
+const VAT_RATE = 0.13;
 
 interface CartLine extends CartItem {
   name: string;
@@ -80,7 +80,7 @@ export default function PosPage() {
   const removeLine = (productId: string) => setCart((prev) => prev.filter((l) => l.productId !== productId));
 
   const subTotal = useMemo(() => cart.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0), [cart]);
-  const vatTotal = useMemo(() => subTotal * (VAT_RATE / 100), [subTotal]);
+  const vatTotal = useMemo(() => subTotal * VAT_RATE, [subTotal]);
   const grandTotal = subTotal + vatTotal;
 
   const handleCheckout = () => {
@@ -288,7 +288,7 @@ export default function PosPage() {
               <span>{formatCurrency(subTotal)}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span>VAT ({VAT_RATE}%)</span>
+              <span>VAT ({VAT_RATE * 100}%)</span>
               <span>{formatCurrency(vatTotal)}</span>
             </div>
             <div className="flex items-center justify-between pt-1 text-lg font-semibold">

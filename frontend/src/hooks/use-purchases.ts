@@ -18,6 +18,9 @@ export interface PurchaseOrder {
   id: string;
   poNumber: string;
   status: string;
+  subTotal: string;
+  vatRate: string;
+  vatAmount: string;
   grandTotal: string;
   amountPaid: string;
   createdAt: string;
@@ -44,6 +47,9 @@ export interface CreatePurchaseOrderInput {
   supplierId: string;
   warehouseId: string;
   items: { productId: string; quantityOrdered: number; unitCost: number; taxRate: number }[];
+  discountTotal?: number;
+  expectedDate?: string;
+  notes?: string;
 }
 
 export function useCreatePurchaseOrder() {
