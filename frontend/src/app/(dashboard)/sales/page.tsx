@@ -20,6 +20,7 @@ import { toast } from "sonner";
 
 const VCTS_LOGIN_URL = "https://vctsdri.dri.gov.np/login";
 const VAT_RATE = 0.13;
+const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 interface CartLine extends CartItem {
   name: string;
@@ -32,6 +33,7 @@ export default function PosPage() {
   const [customerId, setCustomerId] = useState<string>();
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [applyVat, setApplyVat] = useState(true);
   const [requiresVcts, setRequiresVcts] = useState(false);
   const [vehicleNumber, setVehicleNumber] = useState("");
   const [vctsInvoice, setVctsInvoice] = useState<CheckoutInvoice | null>(null);
@@ -78,10 +80,16 @@ export default function PosPage() {
   };
 
   const removeLine = (productId: string) => setCart((prev) => prev.filter((l) => l.productId !== productId));
+  const setDiscount = (productId: string, discount: number) => {
+    setCart((prev) => prev.map((line) => (line.productId === productId ? { ...line, discount } : line)));
+  };
 
-  const subTotal = useMemo(() => cart.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0), [cart]);
-  const vatTotal = useMemo(() => subTotal * VAT_RATE, [subTotal]);
-  const grandTotal = subTotal + vatTotal;
+  const subTotal = useMemo(
+    () => roundMoney(cart.reduce((sum, l) => sum + l.quantity * l.unitPrice - (l.discount ?? 0), 0)),
+    [cart],
+  );
+  const vatTotal = useMemo(() => (applyVat ? roundMoney(subTotal * VAT_RATE) : 0), [applyVat, subTotal]);
+  const grandTotal = roundMoney(subTotal + vatTotal);
 
   const handleCheckout = () => {
     if (!warehouseId || cart.length === 0) return;
@@ -93,7 +101,14 @@ export default function PosPage() {
       {
         warehouseId,
         customerId,
-        items: cart.map(({ productId, quantity, unitPrice }) => ({ productId, quantity, unitPrice, taxRate: VAT_RATE })),
+        applyVat,
+        items: cart.map(({ productId, quantity, unitPrice, discount }) => ({
+          productId,
+          quantity,
+          unitPrice,
+          discount,
+          taxRate: applyVat ? VAT_RATE : 0,
+        })),
         payments: [{ method: paymentMethod, amount: grandTotal }],
         requiresVcts,
         vehicleNumber: requiresVcts ? vehicleNumber.trim() : undefined,
@@ -224,6 +239,16 @@ export default function PosPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{line.name}</p>
                   <p className="text-xs text-muted-foreground">{formatCurrency(line.unitPrice)} each</p>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    aria-label={`Discount for ${line.name}`}
+                    placeholder="Discount"
+                    value={line.discount ?? 0}
+                    onChange={(e) => setDiscount(line.productId, Math.max(0, Number(e.target.value) || 0))}
+                    className="mt-1 h-6 w-24 px-1 text-xs"
+                  />
                 </div>
                 <div className="flex items-center gap-1">
                   <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => updateQuantity(line.productId, -1)}>
@@ -263,6 +288,13 @@ export default function PosPage() {
                 <SelectItem value="MOBILE_WALLET">Mobile wallet</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2 rounded-lg border p-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="sales-apply-vat" className="text-sm">Apply VAT (13%)</Label>
+              <Switch id="sales-apply-vat" checked={applyVat} onCheckedChange={setApplyVat} />
+            </div>
           </div>
 
           <div className="space-y-2 rounded-lg border p-3">

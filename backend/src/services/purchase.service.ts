@@ -4,6 +4,7 @@ import { ApiError } from "../utils/ApiError";
 import { applyStockDelta } from "./inventory.service";
 import { nextSequenceNumber } from "../utils/orderNumber";
 import { ensureDefaultAccounts, postAutoJournalEntry, LEDGER_ACCOUNT_CODES } from "./ledger.service";
+import { logger } from "../config/logger";
 
 interface PurchaseItemInput {
   productId: string;
@@ -21,13 +22,14 @@ interface CreatePurchaseOrderInput {
   discountTotal?: number;
   expectedDate?: Date;
   notes?: string;
+  applyVat?: boolean;
 }
 
 const DEFAULT_VAT_RATE = 0.13;
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
-function withDefaultVat(item: PurchaseItemInput): PurchaseItemInput {
-  return { ...item, taxRate: DEFAULT_VAT_RATE };
+function withDefaultVat(item: PurchaseItemInput, applyVat: boolean): PurchaseItemInput {
+  return { ...item, taxRate: applyVat ? DEFAULT_VAT_RATE : 0 };
 }
 
 function computeItemTotal(item: PurchaseItemInput) {
@@ -44,9 +46,10 @@ export async function createPurchaseOrder(businessId: string, input: CreatePurch
   const warehouse = await prisma.warehouse.findFirst({ where: { id: input.warehouseId, businessId } });
   if (!warehouse) throw ApiError.notFound("Warehouse not found");
 
-  const items = input.items.map(withDefaultVat);
+  const applyVat = input.applyVat ?? true;
+  const items = input.items.map((item) => withDefaultVat(item, applyVat));
   const subTotal = roundMoney(items.reduce((sum, i) => sum + i.quantityOrdered * i.unitCost - (i.discount ?? 0), 0) - (input.discountTotal ?? 0));
-  const vatAmount = roundMoney(subTotal * DEFAULT_VAT_RATE);
+  const vatAmount = applyVat ? roundMoney(subTotal * DEFAULT_VAT_RATE) : 0;
   const itemDiscountTotal = items.reduce((sum, i) => sum + (i.discount ?? 0), 0);
   const discountTotal = itemDiscountTotal + (input.discountTotal ?? 0);
   const grandTotal = roundMoney(subTotal + vatAmount);
@@ -64,7 +67,8 @@ export async function createPurchaseOrder(businessId: string, input: CreatePurch
         expectedDate: input.expectedDate,
         notes: input.notes,
         subTotal,
-        vatRate: DEFAULT_VAT_RATE,
+        applyVat,
+        vatRate: applyVat ? DEFAULT_VAT_RATE : 0,
         vatAmount,
         taxTotal: vatAmount,
         discountTotal,
@@ -84,18 +88,23 @@ export async function createPurchaseOrder(businessId: string, input: CreatePurch
       include: { items: true, supplier: true, warehouse: true },
     });
 
-    await ensureDefaultAccounts(tx, businessId);
-    await postAutoJournalEntry(tx, businessId, {
-      description: `Purchase Order ${po.poNumber}`,
-      reference: po.poNumber,
-      sourceType: "PURCHASE_ORDER",
-      sourceId: po.id,
-      lines: [
-        { code: LEDGER_ACCOUNT_CODES.PURCHASES_INVENTORY, type: "DEBIT", amount: Number(po.subTotal) },
-        { code: LEDGER_ACCOUNT_CODES.VAT_RECEIVABLE, type: "DEBIT", amount: Number(po.vatAmount) },
-        { code: LEDGER_ACCOUNT_CODES.ACCOUNTS_PAYABLE, type: "CREDIT", amount: Number(po.grandTotal) },
-      ],
-    });
+    try {
+      await ensureDefaultAccounts(tx, businessId);
+      await postAutoJournalEntry(tx, businessId, {
+        description: `Purchase Order ${po.poNumber}`,
+        reference: po.poNumber,
+        sourceType: "PURCHASE_ORDER",
+        sourceId: po.id,
+        lines: [
+          { code: LEDGER_ACCOUNT_CODES.PURCHASES_INVENTORY, type: "DEBIT", amount: Number(po.subTotal) },
+          ...(Number(po.vatAmount) > 0 ? [{ code: LEDGER_ACCOUNT_CODES.VAT_RECEIVABLE, type: "DEBIT" as const, amount: Number(po.vatAmount) }] : []),
+          { code: LEDGER_ACCOUNT_CODES.ACCOUNTS_PAYABLE, type: "CREDIT", amount: Number(po.grandTotal) },
+        ],
+      });
+    } catch (error) {
+      logger.error({ err: error, businessId, purchaseOrderId: po.id, poNumber: po.poNumber }, "Purchase order ledger posting failed");
+      throw error;
+    }
     return po;
   });
 }

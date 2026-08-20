@@ -15,6 +15,7 @@ export const createSalesOrderSchema = z.object({
     branchId: z.string().uuid().optional(),
     warehouseId: z.string().uuid(),
     items: z.array(orderItemSchema).min(1),
+    applyVat: z.coerce.boolean().default(true),
     discountTotal: z.coerce.number().nonnegative().default(0),
     notes: z.string().max(1000).optional(),
     couponCode: z.string().max(60).optional(),
@@ -26,6 +27,7 @@ export const posCheckoutSchema = z.object({
     customerId: z.string().uuid().optional(),
     warehouseId: z.string().uuid(),
     items: z.array(orderItemSchema).min(1),
+    applyVat: z.coerce.boolean().default(true),
     discountTotal: z.coerce.number().nonnegative().default(0),
     payments: z
       .array(

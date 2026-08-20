@@ -9,6 +9,7 @@ export interface SalesOrder {
   orderNumber: string;
   status: string;
   isPosSale: boolean;
+  applyVat: boolean;
   subTotal: string;
   vatRate: string;
   vatAmount: string;
@@ -45,6 +46,7 @@ export interface PosCheckoutInput {
   customerId?: string;
   warehouseId: string;
   items: CartItem[];
+  applyVat: boolean;
   discountTotal?: number;
   payments: { method: string; amount: number; reference?: string }[];
   requiresVcts?: boolean;

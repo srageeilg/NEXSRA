@@ -762,6 +762,7 @@ model PurchaseOrder {
   expectedDate DateTime?
 
   subTotal      Decimal @default(0) @db.Decimal(14, 2)
+  applyVat      Boolean @default(true)
   vatRate       Decimal @default(0.13) @db.Decimal(5, 4)
   vatAmount     Decimal @default(0) @db.Decimal(14, 2)
   taxTotal      Decimal @default(0) @db.Decimal(14, 2)
@@ -867,6 +868,7 @@ model SalesOrder {
   orderDate   DateTime         @default(now())
 
   subTotal      Decimal @default(0) @db.Decimal(14, 2)
+  applyVat      Boolean @default(true)
   vatRate       Decimal @default(0.13) @db.Decimal(5, 4)
   vatAmount     Decimal @default(0) @db.Decimal(14, 2)
   taxTotal      Decimal @default(0) @db.Decimal(14, 2)

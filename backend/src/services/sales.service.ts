@@ -4,6 +4,7 @@ import { ApiError } from "../utils/ApiError";
 import { applyStockDelta } from "./inventory.service";
 import { nextSequenceNumber } from "../utils/orderNumber";
 import { ensureDefaultAccounts, postAutoJournalEntry, LEDGER_ACCOUNT_CODES } from "./ledger.service";
+import { logger } from "../config/logger";
 
 const DEFAULT_VAT_RATE = 0.13;
 const roundMoney = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -24,17 +25,17 @@ function computeItemTotal(item: OrderItemInput) {
   return afterDiscount + tax;
 }
 
-function computeTotals(items: OrderItemInput[], orderDiscount = 0) {
+function computeTotals(items: OrderItemInput[], orderDiscount = 0, applyVat = true) {
   const subTotal = roundMoney(items.reduce((sum, i) => sum + i.quantity * i.unitPrice - (i.discount ?? 0), 0) - orderDiscount);
-  const taxTotal = roundMoney(subTotal * DEFAULT_VAT_RATE);
+  const taxTotal = applyVat ? roundMoney(subTotal * DEFAULT_VAT_RATE) : 0;
   const itemDiscountTotal = items.reduce((sum, i) => sum + (i.discount ?? 0), 0);
   const discountTotal = itemDiscountTotal + orderDiscount;
   const grandTotal = roundMoney(subTotal + taxTotal);
-  return { subTotal, vatRate: DEFAULT_VAT_RATE, vatAmount: taxTotal, taxTotal, discountTotal, grandTotal };
+  return { subTotal, applyVat, vatRate: applyVat ? DEFAULT_VAT_RATE : 0, vatAmount: taxTotal, taxTotal, discountTotal, grandTotal };
 }
 
-function withDefaultVat(item: OrderItemInput): OrderItemInput {
-  return { ...item, taxRate: DEFAULT_VAT_RATE };
+function withDefaultVat(item: OrderItemInput, applyVat: boolean): OrderItemInput {
+  return { ...item, taxRate: applyVat ? DEFAULT_VAT_RATE : 0 };
 }
 
 interface CreateSalesOrderInput {
@@ -44,14 +45,16 @@ interface CreateSalesOrderInput {
   items: OrderItemInput[];
   discountTotal?: number;
   notes?: string;
+  applyVat?: boolean;
 }
 
 export async function createSalesOrder(businessId: string, input: CreateSalesOrderInput, createdById?: string) {
   const warehouse = await prisma.warehouse.findFirst({ where: { id: input.warehouseId, businessId } });
   if (!warehouse) throw ApiError.notFound("Warehouse not found");
 
-  const items = input.items.map(withDefaultVat);
-  const totals = computeTotals(items, input.discountTotal ?? 0);
+  const applyVat = input.applyVat ?? true;
+  const items = input.items.map((item) => withDefaultVat(item, applyVat));
+  const totals = computeTotals(items, input.discountTotal ?? 0, applyVat);
 
   return prisma.$transaction(async (tx) => {
     const orderNumber = await nextSequenceNumber(tx, "salesOrder", businessId, "SO");
@@ -81,18 +84,23 @@ export async function createSalesOrder(businessId: string, input: CreateSalesOrd
       include: { items: true, customer: true },
     });
 
-    await ensureDefaultAccounts(tx, businessId);
-    await postAutoJournalEntry(tx, businessId, {
-      description: `Sales Order ${order.orderNumber}`,
-      reference: order.orderNumber,
-      sourceType: "SALES_ORDER",
-      sourceId: order.id,
-      lines: [
-        { code: LEDGER_ACCOUNT_CODES.ACCOUNTS_RECEIVABLE, type: "DEBIT", amount: Number(order.grandTotal) },
-        { code: LEDGER_ACCOUNT_CODES.SALES_REVENUE, type: "CREDIT", amount: Number(order.subTotal) },
-        { code: LEDGER_ACCOUNT_CODES.VAT_PAYABLE, type: "CREDIT", amount: Number(order.vatAmount) },
-      ],
-    });
+    try {
+      await ensureDefaultAccounts(tx, businessId);
+      await postAutoJournalEntry(tx, businessId, {
+        description: `Sales Order ${order.orderNumber}`,
+        reference: order.orderNumber,
+        sourceType: "SALES_ORDER",
+        sourceId: order.id,
+        lines: [
+          { code: LEDGER_ACCOUNT_CODES.ACCOUNTS_RECEIVABLE, type: "DEBIT", amount: Number(order.grandTotal) },
+          { code: LEDGER_ACCOUNT_CODES.SALES_REVENUE, type: "CREDIT", amount: Number(order.subTotal) },
+          ...(Number(order.vatAmount) > 0 ? [{ code: LEDGER_ACCOUNT_CODES.VAT_PAYABLE, type: "CREDIT" as const, amount: Number(order.vatAmount) }] : []),
+        ],
+      });
+    } catch (error) {
+      logger.error({ err: error, businessId, salesOrderId: order.id, orderNumber: order.orderNumber }, "Sales order ledger posting failed");
+      throw error;
+    }
     return order;
   });
 }
@@ -111,6 +119,7 @@ interface PosCheckoutInput {
   payments: PosPaymentInput[];
   requiresVcts?: boolean;
   vehicleNumber?: string;
+  applyVat?: boolean;
 }
 
 /** Single-transaction POS sale: creates the order, an invoice, deducts stock, records payment(s), and updates the customer ledger for any unpaid balance. */
@@ -118,9 +127,11 @@ export async function posCheckout(businessId: string, input: PosCheckoutInput, c
   const warehouse = await prisma.warehouse.findFirst({ where: { id: input.warehouseId, businessId } });
   if (!warehouse) throw ApiError.notFound("Warehouse not found");
 
-  const items = input.items.map(withDefaultVat);
-  const totals = computeTotals(items, input.discountTotal ?? 0);
+  const applyVat = input.applyVat ?? true;
+  const items = input.items.map((item) => withDefaultVat(item, applyVat));
+  const totals = computeTotals(items, input.discountTotal ?? 0, applyVat);
   const amountPaid = input.payments.reduce((sum, p) => sum + p.amount, 0);
+  if (amountPaid > totals.grandTotal + 0.01) throw ApiError.badRequest("Payment amount cannot exceed the order total");
 
   return prisma.$transaction(
     async (tx) => {
@@ -240,10 +251,11 @@ export async function posCheckout(businessId: string, input: PosCheckoutInput, c
     }
 
     // Auto-post to the general ledger: Cash/AR against Revenue+VAT, and COGS against Inventory.
-    await ensureDefaultAccounts(tx, businessId);
+    try {
+      await ensureDefaultAccounts(tx, businessId);
 
     const revenueAmount = totals.subTotal;
-    await postAutoJournalEntry(tx, businessId, {
+      await postAutoJournalEntry(tx, businessId, {
       description: `POS Sale ${orderNumber}`,
       reference: invoiceNumber,
       sourceType: "SALES_ORDER",
@@ -252,9 +264,13 @@ export async function posCheckout(businessId: string, input: PosCheckoutInput, c
         { code: LEDGER_ACCOUNT_CODES.CASH, type: "DEBIT", amount: amountPaid },
         { code: LEDGER_ACCOUNT_CODES.ACCOUNTS_RECEIVABLE, type: "DEBIT", amount: outstandingAmount },
         { code: LEDGER_ACCOUNT_CODES.SALES_REVENUE, type: "CREDIT", amount: revenueAmount },
-        { code: LEDGER_ACCOUNT_CODES.VAT_PAYABLE, type: "CREDIT", amount: totals.taxTotal },
+        ...(totals.taxTotal > 0 ? [{ code: LEDGER_ACCOUNT_CODES.VAT_PAYABLE, type: "CREDIT" as const, amount: totals.taxTotal }] : []),
       ],
-    });
+      });
+    } catch (error) {
+      logger.error({ err: error, businessId, salesOrderId: order.id, orderNumber }, "POS sales ledger posting failed");
+      throw error;
+    }
 
     const products = await tx.product.findMany({
       where: { id: { in: order.items.map((i) => i.productId) } },
@@ -263,16 +279,21 @@ export async function posCheckout(businessId: string, input: PosCheckoutInput, c
     const costByProduct = new Map(products.map((p) => [p.id, Number(p.purchasePrice)]));
     const cogsAmount = order.items.reduce((sum, i) => sum + i.quantity * (costByProduct.get(i.productId) ?? 0), 0);
 
-    await postAutoJournalEntry(tx, businessId, {
-      description: `Cost of goods sold — ${orderNumber}`,
-      reference: invoiceNumber,
-      sourceType: "SALES_ORDER_COGS",
-      sourceId: order.id,
-      lines: [
-        { code: LEDGER_ACCOUNT_CODES.COGS, type: "DEBIT", amount: cogsAmount },
-        { code: LEDGER_ACCOUNT_CODES.INVENTORY, type: "CREDIT", amount: cogsAmount },
-      ],
-    });
+    try {
+      await postAutoJournalEntry(tx, businessId, {
+        description: `Cost of goods sold — ${orderNumber}`,
+        reference: invoiceNumber,
+        sourceType: "SALES_ORDER_COGS",
+        sourceId: order.id,
+        lines: [
+          { code: LEDGER_ACCOUNT_CODES.COGS, type: "DEBIT", amount: cogsAmount },
+          { code: LEDGER_ACCOUNT_CODES.INVENTORY, type: "CREDIT", amount: cogsAmount },
+        ],
+      });
+    } catch (error) {
+      logger.error({ err: error, businessId, salesOrderId: order.id, orderNumber }, "POS COGS ledger posting failed");
+      throw error;
+    }
 
     return { order, invoice };
     },

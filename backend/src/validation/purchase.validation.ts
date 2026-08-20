@@ -14,6 +14,7 @@ export const createPurchaseOrderSchema = z.object({
     supplierId: z.string().uuid(),
     warehouseId: z.string().uuid(),
     items: z.array(purchaseItemSchema).min(1),
+    applyVat: z.coerce.boolean().default(true),
     discountTotal: z.coerce.number().nonnegative().default(0),
     expectedDate: z.coerce.date().optional(),
     notes: z.string().max(1000).optional(),
