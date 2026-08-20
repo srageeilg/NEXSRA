@@ -187,5 +187,7 @@ export async function addProductImage(businessId: string, productId: string, url
 export async function removeProductImage(businessId: string, productId: string, imageId: string) {
   const product = await prisma.product.findFirst({ where: { id: productId, businessId } });
   if (!product) throw ApiError.notFound("Product not found");
-  await prisma.productImage.delete({ where: { id: imageId } });
+  const image = await prisma.productImage.findFirst({ where: { id: imageId, productId } });
+  if (!image) throw ApiError.notFound("Product image not found");
+  await prisma.productImage.delete({ where: { id: image.id } });
 }
