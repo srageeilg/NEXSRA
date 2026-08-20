@@ -24,4 +24,4 @@ COPY package.json ./
 RUN mkdir -p uploads
 
 EXPOSE 8000
-CMD ["node", "dist/server.js"]
+CMD ["npm", "start"]
